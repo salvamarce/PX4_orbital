@@ -710,7 +710,8 @@ void RCUpdate::UpdateManualControlInput(const hrt_abstime &timestamp_sample)
 	actuator_group_3.control[0] = manual_control_input.y;
 	actuator_group_3.control[1] = manual_control_input.x;
 	actuator_group_3.control[2] = manual_control_input.r;
-	actuator_group_3.control[3] = manual_control_input.z;
+	// for backwards compatibility of the mixers z is sent [0,1]
+	actuator_group_3.control[3] = (manual_control_input.z + 1.f) * .5f;
 	actuator_group_3.control[4] = manual_control_input.flaps;
 
 	float new_aux_values[3];
