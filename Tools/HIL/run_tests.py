@@ -73,7 +73,7 @@ def do_test(port, baudrate, test_name):
     print('|======================================================================')
 
     timeout_start = time.time()
-    timeout = 2  # 2 seconds
+    timeout = 4  # 4 seconds
 
     # wait for command echo
     serial_cmd = '{0}\n'.format(cmd)
