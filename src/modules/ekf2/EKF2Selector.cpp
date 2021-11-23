@@ -277,7 +277,7 @@ bool EKF2Selector::UpdateErrorScores()
 				primary_updated = true;
 			}
 
-			// test ratios are invalid when 0, >= 1 is a failure
+			// test ratios are invalid when 0, > 1 is a failure
 			if (!PX4_ISFINITE(status.vel_test_ratio) || (status.vel_test_ratio <= 0.f)) {
 				status.vel_test_ratio = 1.f;
 			}
@@ -290,10 +290,10 @@ bool EKF2Selector::UpdateErrorScores()
 				status.hgt_test_ratio = 1.f;
 			}
 
-			float combined_test_ratio = fmaxf(0.5f * (status.vel_test_ratio + status.pos_test_ratio), status.hgt_test_ratio);
+			const float combined_test_ratio = fmaxf(0.5f * (status.vel_test_ratio + status.pos_test_ratio), status.hgt_test_ratio);
 
 			_instance[i].combined_test_ratio = combined_test_ratio;
-			_instance[i].healthy = (status.filter_fault_flags == 0) && (combined_test_ratio > 0.f) && (combined_test_ratio < 1.f);
+			_instance[i].healthy = (status.filter_fault_flags == 0) && (combined_test_ratio > 0.f) && (combined_test_ratio <= 1.f);
 			_instance[i].filter_fault = (status.filter_fault_flags != 0);
 			_instance[i].timeout = false;
 
