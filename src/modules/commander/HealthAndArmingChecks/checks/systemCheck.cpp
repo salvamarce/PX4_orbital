@@ -191,32 +191,36 @@ void SystemChecks::checkAndReport(const Context &context, Report &reporter)
 		}
 	}
 
-	if (_param_gf_action.get() != 0 && context.status().geofence_violated) {
-		/* EVENT
-		 * @description
-		 * <profile name="dev">
-		 * This check can be configured via <param>GF_ACTION</param> parameter.
-		 * </profile>
-		 */
-		reporter.armingCheckFailure(NavModes::All, health_component_t::system, events::ID("check_system_gf_violation"),
-					    events::Log::Error, "Vehicle outside geofence");
+	if ((_param_gf_action.get() != 0) && (_param_gf2_action.get() != 0)) {
 
-		if (reporter.mavlink_log_pub()) {
-			mavlink_log_critical(reporter.mavlink_log_pub(), "Preflight Fail: Vehicle outside geofence");
-		}
-	}
-
-	// Arm Requirements: authorization
-	if (_param_com_arm_auth_req.get() != 0 && !context.isArmed()) {
-		if (arm_auth_check() != vehicle_command_ack_s::VEHICLE_CMD_RESULT_ACCEPTED) {
+		if (context.status().primary_geofence_breached ||
+		    context.status().secondary_geofence_breached) {
 			/* EVENT
+			 * @description
+			 * <profile name="dev">
+			 * This check can be configured via <param>GF_ACTION</param> parameter.
+			 * </profile>
 			 */
-			reporter.armingCheckFailure(NavModes::All, health_component_t::system, events::ID("check_system_arm_auth_failed"),
-						    events::Log::Error, "Arm authorization denied");
-		}
-	}
+			reporter.armingCheckFailure(NavModes::All, health_component_t::system, events::ID("check_system_gf_violation"),
+						    events::Log::Error, "Vehicle outside geofence");
 
-	if (reporter.failsafeFlags().rc_signal_found_once) {
-		reporter.setIsPresent(health_component_t::remote_control);
+			if (reporter.mavlink_log_pub()) {
+				mavlink_log_critical(reporter.mavlink_log_pub(), "Preflight Fail: Vehicle outside geofence");
+			}
+		}
+
+		// Arm Requirements: authorization
+		if (_param_com_arm_auth_req.get() != 0 && !context.isArmed()) {
+			if (arm_auth_check() != vehicle_command_ack_s::VEHICLE_CMD_RESULT_ACCEPTED) {
+				/* EVENT
+				 */
+				reporter.armingCheckFailure(NavModes::All, health_component_t::system, events::ID("check_system_arm_auth_failed"),
+							    events::Log::Error, "Arm authorization denied");
+			}
+		}
+
+		if (reporter.failsafeFlags().rc_signal_found_once) {
+			reporter.setIsPresent(health_component_t::remote_control);
+		}
 	}
 }
