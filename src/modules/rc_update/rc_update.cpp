@@ -685,10 +685,10 @@ void RCUpdate::UpdateManualControlInput(const hrt_abstime &timestamp_sample)
 	manual_control_input.data_source = manual_control_setpoint_s::SOURCE_RC;
 
 	// limit controls
-	manual_control_input.y     = get_rc_value(rc_channels_s::FUNCTION_ROLL,    -1.f, 1.f);
-	manual_control_input.x     = get_rc_value(rc_channels_s::FUNCTION_PITCH,   -1.f, 1.f);
-	manual_control_input.r     = get_rc_value(rc_channels_s::FUNCTION_YAW,     -1.f, 1.f);
-	manual_control_input.z     = get_rc_value(rc_channels_s::FUNCTION_THROTTLE, -1.f, 1.f);
+	manual_control_input.roll = get_rc_value(rc_channels_s::FUNCTION_ROLL,    -1.f, 1.f);
+	manual_control_input.pitch = get_rc_value(rc_channels_s::FUNCTION_PITCH,   -1.f, 1.f);
+	manual_control_input.yaw = get_rc_value(rc_channels_s::FUNCTION_YAW,     -1.f, 1.f);
+	manual_control_input.throttle = get_rc_value(rc_channels_s::FUNCTION_THROTTLE, -1.f, 1.f);
 	manual_control_input.flaps = get_rc_value(rc_channels_s::FUNCTION_FLAPS,   -1.f, 1.f);
 	manual_control_input.aux1  = get_rc_value(rc_channels_s::FUNCTION_AUX_1,   -1.f, 1.f);
 	manual_control_input.aux2  = get_rc_value(rc_channels_s::FUNCTION_AUX_2,   -1.f, 1.f);
@@ -707,11 +707,11 @@ void RCUpdate::UpdateManualControlInput(const hrt_abstime &timestamp_sample)
 	// copy in previous actuator control setpoint in case aux{1, 2, 3} isn't changed
 	_actuator_controls_3_sub.update(&actuator_group_3);
 	// populate and publish actuator_controls_3 copied from mapped manual_control_input
-	actuator_group_3.control[0] = manual_control_input.y;
-	actuator_group_3.control[1] = manual_control_input.x;
-	actuator_group_3.control[2] = manual_control_input.r;
+	actuator_group_3.control[0] = manual_control_input.roll;
+	actuator_group_3.control[1] = manual_control_input.pitch;
+	actuator_group_3.control[2] = manual_control_input.yaw;
 	// for backwards compatibility of the mixers z is sent [0,1]
-	actuator_group_3.control[3] = (manual_control_input.z + 1.f) * .5f;
+	actuator_group_3.control[3] = (manual_control_input.throttle + 1.f) * .5f;
 	actuator_group_3.control[4] = manual_control_input.flaps;
 
 	float new_aux_values[3];

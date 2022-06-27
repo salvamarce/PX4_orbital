@@ -376,12 +376,6 @@ int fixedwing_control_thread_main(int argc, char *argv[])
 					orb_copy(ORB_ID(manual_control_setpoint), manual_control_setpoint_sub, &manual_control_setpoint);
 				}
 
-				/* check if the throttle was ever more than 50% - go later only to failsafe if yes */
-				if (PX4_ISFINITE(manual_control_setpoint.z) &&
-				    (manual_control_setpoint.z >= .2f) &&
-				    (manual_control_setpoint.z <= 1.f)) {
-				}
-
 				/* get the system status and the flight mode we're in */
 				orb_copy(ORB_ID(vehicle_status), vstatus_sub, &vstatus);
 
