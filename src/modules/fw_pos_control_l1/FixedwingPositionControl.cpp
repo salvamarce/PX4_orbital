@@ -737,8 +737,9 @@ FixedwingPositionControl::updateManualTakeoffStatus()
 }
 
 void
-FixedwingPositionControl::set_control_mode_current(const hrt_abstime &now, bool pos_sp_curr_valid)
+FixedwingPositionControl::set_control_mode_current(const hrt_abstime &now)
 {
+
 	/* only run position controller in fixed-wing mode and during transitions for VTOL */
 	if (_vehicle_status.vehicle_type == vehicle_status_s::VEHICLE_TYPE_ROTARY_WING && !_vehicle_status.in_transition_mode) {
 		_control_mode_current = FW_POSCTRL_MODE_OTHER;
@@ -750,7 +751,7 @@ FixedwingPositionControl::set_control_mode_current(const hrt_abstime &now, bool 
 	_skipping_takeoff_detection = false;
 
 	if (((_control_mode.flag_control_auto_enabled && _control_mode.flag_control_position_enabled) ||
-	     _control_mode.flag_control_offboard_enabled) && pos_sp_curr_valid) {
+	     _control_mode.flag_control_offboard_enabled)) {
 
 		if (_pos_sp_triplet.current.type == position_setpoint_s::SETPOINT_TYPE_TAKEOFF) {
 
@@ -785,8 +786,7 @@ FixedwingPositionControl::set_control_mode_current(const hrt_abstime &now, bool 
 			_control_mode_current = FW_POSCTRL_MODE_AUTO;
 		}
 
-	} else if (_control_mode.flag_control_auto_enabled && _control_mode.flag_control_climb_rate_enabled
-		   && pos_sp_curr_valid) {
+	} else if (_control_mode.flag_control_auto_enabled && _control_mode.flag_control_climb_rate_enabled) {
 
 		// reset timer the first time we switch into this mode
 		if (commanded_position_control_mode != FW_POSCTRL_MODE_AUTO_ALTITUDE
@@ -2209,7 +2209,7 @@ FixedwingPositionControl::Run()
 		Vector2d curr_pos(_current_latitude, _current_longitude);
 		Vector2f ground_speed(_local_pos.vx, _local_pos.vy);
 
-		set_control_mode_current(_local_pos.timestamp, _pos_sp_triplet.current.valid);
+		set_control_mode_current(_local_pos.timestamp);
 
 		update_in_air_states(_local_pos.timestamp);
 

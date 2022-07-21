@@ -664,9 +664,8 @@ private:
 	 * May also change the position setpoint type depending on the desired behavior.
 	 *
 	 * @param now Current system time [us]
-	 * @param pos_sp_curr_valid True if the current position setpoint is valid
 	 */
-	void set_control_mode_current(const hrt_abstime &now, bool pos_sp_curr_valid);
+	void set_control_mode_current(const hrt_abstime &now);
 
 	/**
 	 * @brief Compensate trim throttle for air density and vehicle weight.
