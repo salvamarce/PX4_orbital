@@ -23,6 +23,9 @@ param set-default MC_PITCHRATE_FF 0.1
 
 param set-default CA_AIRFRAME 10
 param set-default CA_HELI_YAW_CCW 1
+param set-default CA_SP0_ANG0 0
+param set-default CA_SP0_ANG1 120
+param set-default CA_SP0_ANG2 240
 
 param set-default PWM_MAIN_FUNC1 101
 param set-default PWM_MAIN_FUNC2 102
