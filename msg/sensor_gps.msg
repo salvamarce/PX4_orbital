@@ -19,6 +19,7 @@ float32 epv			# GPS vertical position accuracy (metres)
 
 float32 hdop			# Horizontal dilution of precision
 float32 vdop			# Vertical dilution of precision
+float32 pdop
 
 int32 noise_per_ms		# GPS noise per millisecond
 uint16 automatic_gain_control   # Automatic gain control monitor
@@ -29,6 +30,12 @@ uint8 JAMMING_STATE_WARNING  = 2
 uint8 JAMMING_STATE_CRITICAL = 3
 uint8 jamming_state		# indicates whether jamming has been detected or suspected by the receivers. O: Unknown, 1: OK, 2: Warning, 3: Critical
 int32 jamming_indicator		# indicates jamming is occurring
+
+uint8 SPOOFING_UNKNOWN            = 0
+uint8 SPOOFING_NONE               = 1
+uint8 SPOOFING_INDICATED          = 2
+uint8 SPOOFING_MULTIPLE_INDICATED = 3
+uint8 spoofing_detection_state
 
 float32 vel_m_s			# GPS ground speed, (metres/sec)
 float32 vel_n_m_s		# GPS North velocity, (metres/sec)
