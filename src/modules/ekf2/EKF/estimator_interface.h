@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2015-2020 Estimation and Control Library (ECL). All rights reserved.
+ *   Copyright (c) 2015-2022 Estimation and Control Library (ECL). All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -341,8 +341,7 @@ protected:
 
 	// innovation consistency check monitoring ratios
 	AlphaFilter<float> _gnss_yaw_signed_test_ratio_lpf{0.1f}; // average signed test ratio used to detect a bias in the state
-	Vector2f _ev_vel_test_ratio{};		// EV velocity innovation consistency check ratios
-	Vector2f _ev_pos_test_ratio{};		// EV position innovation consistency check ratios
+
 	float _optflow_test_ratio{};		// Optical flow innovation consistency check ratio
 	float _hagl_test_ratio{};		// height above terrain measurement innovation consistency check ratio
 	float _beta_test_ratio{};		// sideslip innovation consistency check ratio

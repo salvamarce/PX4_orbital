@@ -158,28 +158,3 @@ void Ekf::fuseRngHgt(estimator_aid_source_1d_s &rng_hgt)
 		rng_hgt.time_last_fuse = _imu_sample_delayed.time_us;
 	}
 }
-
-void Ekf::fuseEvHgt()
-{
-	const float measurement = _ev_sample_delayed.pos(2);
-	const float measurement_var = fmaxf(_ev_sample_delayed.posVar(2), sq(0.01f));
-
-	const float bias = _ev_hgt_b_est.getBias();
-	const float bias_var = _ev_hgt_b_est.getBiasVar();
-
-	_ev_hgt_b_est.setMaxStateNoise(sqrtf(measurement_var));
-	_ev_hgt_b_est.setProcessNoiseSpectralDensity(_params.ev_hgt_bias_nsd);
-	_ev_hgt_b_est.fuseBias(measurement - _state.pos(2), measurement_var + P(9, 9));
-
-	// calculate the innovation assuming the external vision observation is in local NED frame
-	const float obs = measurement - bias;
-	const float obs_var = measurement_var + bias_var;
-	_ev_pos_innov(2) = _state.pos(2) - obs;
-
-	// innovation gate size
-	float innov_gate = fmaxf(_params.ev_pos_innov_gate, 1.f);
-
-	// _ev_pos_test_ratio(1) is the vertical test ratio
-	fuseVerticalPosition(_ev_pos_innov(2), innov_gate, obs_var,
-			     _ev_pos_innov_var(2), _ev_pos_test_ratio(1));
-}

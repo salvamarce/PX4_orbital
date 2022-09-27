@@ -46,7 +46,7 @@ void Ekf::controlHeightFusion()
 	controlBaroHeightFusion();
 	controlGnssHeightFusion(_gps_sample_delayed);
 	controlRangeHeightFusion();
-	controlEvHeightFusion();
+	controlEvHeightFusion(_ev_sample_delayed);
 
 	checkHeightSensorRefFallback();
 }
@@ -62,6 +62,7 @@ void Ekf::checkHeightSensorRefFallback()
 
 	switch (_params.height_sensor_ref) {
 	default:
+
 	/* FALLTHROUGH */
 	case HeightSensor::UNKNOWN:
 		fallback_list[0] = HeightSensor::GNSS;
@@ -190,11 +191,11 @@ Likelihood Ekf::estimateInertialNavFallingLikelihood() const
 	}
 
 	if (_control_status.flags.ev_hgt) {
-		checks[4] = {ReferenceType::GROUND, _ev_pos_innov(2), _ev_pos_innov_var(2)};
+		checks[4] = {ReferenceType::GROUND, _aid_src_ev_pos.innovation[2], _aid_src_ev_pos.innovation_variance[2]};
 	}
 
 	if (_control_status.flags.ev_vel) {
-		checks[5] = {ReferenceType::GROUND, _ev_vel_innov(2), _ev_vel_innov_var(2)};
+		checks[5] = {ReferenceType::GROUND, _aid_src_ev_vel.innovation[2], _aid_src_ev_vel.innovation_variance[2]};
 	}
 
 	// Compute the check based on innovation ratio for all the sources

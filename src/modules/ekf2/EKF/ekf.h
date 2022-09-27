@@ -48,6 +48,7 @@
 #include "EKFGSF_yaw.h"
 #include "bias_estimator.hpp"
 #include "height_bias_estimator.hpp"
+#include "position_bias_estimator.hpp"
 
 #include <uORB/topics/estimator_aid_source_1d.h>
 #include <uORB/topics/estimator_aid_source_2d.h>
@@ -385,9 +386,6 @@ public:
 	// return a bitmask integer that describes which state estimates can be used for flight control
 	void get_ekf_soln_status(uint16_t *status) const;
 
-	// return the quaternion defining the rotation from the External Vision to the EKF reference frame
-	matrix::Quatf getVisionAlignmentQuaternion() const { return Quatf(_R_ev_to_ekf); };
-
 	// use the latest IMU data at the current time horizon.
 	Quatf calculate_quaternion() const;
 
@@ -413,6 +411,8 @@ public:
 	const BiasEstimator::status &getRngHgtBiasEstimatorStatus() const { return _rng_hgt_b_est.getStatus(); }
 	const BiasEstimator::status &getEvHgtBiasEstimatorStatus() const { return _ev_hgt_b_est.getStatus(); }
 
+	const BiasEstimator::status &getEvPosBiasEstimatorStatus(int i) const { return _ev_pos_b_est.getStatus(i); }
+
 	const auto &aid_src_airspeed() const { return _aid_src_airspeed; }
 
 	const auto &aid_src_baro_hgt() const { return _aid_src_baro_hgt; }
@@ -422,6 +422,8 @@ public:
 	const auto &aid_src_fake_pos() const { return _aid_src_fake_pos; }
 
 	const auto &aid_src_ev_yaw() const { return _aid_src_ev_yaw; }
+	const auto &aid_src_ev_vel() const { return _aid_src_ev_vel; }
+	const auto &aid_src_ev_pos() const { return _aid_src_ev_pos; }
 
 	const auto &aid_src_gnss_yaw() const { return _aid_src_gnss_yaw; }
 	const auto &aid_src_gnss_vel() const { return _aid_src_gnss_vel; }
@@ -465,12 +467,6 @@ private:
 
 	bool _filter_initialised{false};	///< true when the EKF sttes and covariances been initialised
 
-	// variables used when position data is being fused using a relative position odometry model
-	bool _fuse_hpos_as_odom{false};		///< true when the NE position data is being fused using an odometry assumption
-	Vector2f _hpos_pred_prev{};		///< previous value of NE position state used by odometry fusion (m)
-	float _yaw_pred_prev{};                 ///< previous value of yaw state used by odometry fusion (m)
-	bool _hpos_prev_available{false};	///< true when previous values of the estimate and measurement are available for use
-	Dcmf _R_ev_to_ekf;			///< transformation matrix that rotates observations from the EV to the EKF navigation frame, initialized with Identity
 	bool _inhibit_ev_yaw_use{false};	///< true when the vision yaw data should not be used (e.g.: NE fusion requires true North)
 
 	// booleans true when fresh sensor data is available at the fusion time horizon
@@ -497,7 +493,12 @@ private:
 	uint64_t _time_last_beta_fuse{0};	///< time the last fusion of synthetic sideslip measurements were performed (uSec)
 	uint64_t _time_last_zero_velocity_fuse{0}; ///< last time of zero velocity update (uSec)
 	uint64_t _time_last_healthy_rng_data{0};
+
 	uint8_t _nb_gps_yaw_reset_available{0}; ///< remaining number of resets allowed before switching to another aiding source
+
+	uint8_t _nb_ev_pos_reset_available{0};
+	uint8_t _nb_ev_vel_reset_available{0};
+	uint8_t _nb_ev_yaw_reset_available{0};
 
 	Vector3f _last_known_pos{};		///< last known local position vector (m)
 
@@ -528,17 +529,6 @@ private:
 
 	Vector3f _delta_vel_bias_var_accum{};		///< kahan summation algorithm accumulator for delta velocity bias variance
 	Vector3f _delta_angle_bias_var_accum{};	///< kahan summation algorithm accumulator for delta angle bias variance
-
-	float _vert_pos_innov_ratio{0.f};	///< vertical position innovation divided by estimated standard deviation of innovation
-	uint64_t _vert_pos_fuse_attempt_time_us{0};	///< last system time in usec vertical position measurement fuson was attempted
-	float _vert_vel_innov_ratio{0.f};		///< standard deviation of vertical velocity innovation
-	uint64_t _vert_vel_fuse_time_us{0};	///< last system time in usec time vertical velocity measurement fuson was attempted
-
-	Vector3f _ev_vel_innov{};	///< external vision velocity innovations (m/sec)
-	Vector3f _ev_vel_innov_var{};	///< external vision velocity innovation variances ((m/sec)**2)
-
-	Vector3f _ev_pos_innov{};	///< external vision position innovations (m)
-	Vector3f _ev_pos_innov_var{};	///< external vision position innovation variances (m**2)
 
 	Vector2f _drag_innov{};		///< multirotor drag measurement innovation (m/sec**2)
 	Vector2f _drag_innov_var{};	///< multirotor drag measurement innovation variance ((m/sec**2)**2)
@@ -571,6 +561,8 @@ private:
 	estimator_aid_source_1d_s _aid_src_fake_hgt{};
 
 	estimator_aid_source_1d_s _aid_src_ev_yaw{};
+	estimator_aid_source_3d_s _aid_src_ev_vel{};
+	estimator_aid_source_3d_s _aid_src_ev_pos{};
 
 	estimator_aid_source_1d_s _aid_src_gnss_yaw{};
 	estimator_aid_source_3d_s _aid_src_gnss_vel{};
@@ -699,7 +691,6 @@ private:
 
 	void fuseBaroHgt(estimator_aid_source_1d_s &baro_hgt);
 	void fuseRngHgt(estimator_aid_source_1d_s &range_hgt);
-	void fuseEvHgt();
 
 	void updateBaroHgt(const baroSample &baro_sample, estimator_aid_source_1d_s &baro_hgt);
 	void updateRngHgt(estimator_aid_source_1d_s &rng_hgt);
@@ -713,11 +704,10 @@ private:
 
 	void resetVelocityToGps(const gpsSample &gps_sample);
 	void resetHorizontalVelocityToOpticalFlow();
-	void resetVelocityToVision();
 	void resetHorizontalVelocityToZero();
 
+	void resetHorizontalPositionToEv(const extVisionSample &ev_sample);
 	void resetHorizontalPositionToGps(const gpsSample &gps_sample);
-	void resetHorizontalPositionToVision();
 	void resetHorizontalPositionToOpticalFlow();
 	void resetHorizontalPositionToLastKnown();
 	void resetHorizontalPositionTo(const Vector2f &new_horz_pos);
@@ -729,10 +719,9 @@ private:
 	void resetHeightToBaro(const baroSample &baro_sample);
 	void resetHeightToGps(const gpsSample &gps_sample);
 	void resetHeightToRng();
-	void resetHeightToEv();
+	void resetHeightToEv(const extVisionSample &ev_sample);
 
 	void resetVerticalVelocityToGps(const gpsSample &gps_sample);
-	void resetVerticalVelocityToEv(const extVisionSample &ev_sample);
 	void resetVerticalVelocityToZero();
 
 	// fuse optical flow line of sight rate measurements
@@ -746,24 +735,7 @@ private:
 	void fuseVelocity(estimator_aid_source_3d_s &vel_aid_src);
 	void fusePosition(estimator_aid_source_3d_s &pos_aid_src);
 
-	bool fuseHorizontalVelocity(const Vector3f &innov, float innov_gate, const Vector3f &obs_var,
-				    Vector3f &innov_var, Vector2f &test_ratio);
-
-	bool fuseVerticalVelocity(const Vector3f &innov, float innov_gate, const Vector3f &obs_var,
-				  Vector3f &innov_var, Vector2f &test_ratio);
-
-	bool fuseHorizontalPosition(const Vector3f &innov, float innov_gate, const Vector3f &obs_var,
-				    Vector3f &innov_var, Vector2f &test_ratiov);
-
-	bool fuseVerticalPosition(float innov, float innov_gate, float obs_var,
-				  float &innov_var, float &test_ratio);
-
 	void updateGpsYaw(const gpsSample &gps_sample);
-	void updateGpsVel(const gpsSample &gps_sample);
-	void updateGpsPos(const gpsSample &gps_sample);
-
-	void fuseGpsVel();
-	void fuseGpsPos();
 
 	// calculate optical flow body angular rate compensation
 	// returns false if bias corrected body rate data is unavailable
@@ -798,10 +770,6 @@ private:
 	// return true if successful
 	bool resetMagHeading();
 
-	// reset the heading using the external vision measurements
-	// return true if successful
-	bool resetYawToEv();
-
 	// Do a forced re-alignment of the yaw angle to align with the horizontal velocity vector from the GPS.
 	// It is used to align the yaw angle after launch or takeoff for fixed wing vehicle.
 	bool realignYawGPS(const Vector3f &mag);
@@ -811,13 +779,6 @@ private:
 
 	// modify output filter to match the the EKF state at the fusion time horizon
 	void alignOutputFilter();
-
-	// update the rotation matrix which transforms EV navigation frame measurements into NED
-	void calcExtVisRotMat();
-
-	Vector3f getVisionVelocityInEkfFrame() const;
-
-	Vector3f getVisionVelocityVarianceInEkfFrame() const;
 
 	// matrix vector multiplication for computing K<24,1> * H<1,24> * P<24,24>
 	// that is optimized by exploring the sparsity in H
@@ -903,6 +864,9 @@ private:
 
 	// control fusion of external vision observations
 	void controlExternalVisionFusion();
+	void controlEvPosFusion(const extVisionSample &ev_sample);
+	void controlEvVelFusion(const extVisionSample &ev_sample);
+	void controlEvYawFusion(const extVisionSample &ev_sample);
 
 	// control fusion of optical flow observations
 	void controlOpticalFlowFusion();
@@ -976,7 +940,7 @@ private:
 	void controlBaroHeightFusion();
 	void controlGnssHeightFusion(const gpsSample &gps_sample);
 	void controlRangeHeightFusion();
-	void controlEvHeightFusion();
+	void controlEvHeightFusion(const extVisionSample &ev_sample);
 
 	bool isConditionalRangeAidSuitable();
 
@@ -995,7 +959,8 @@ private:
 	void startRngHgtFusion();
 	void stopRngHgtFusion();
 	void startRngAidHgtFusion();
-	void startEvHgtFusion();
+
+	void startEvHgtFusion(const extVisionSample &ev_sample);
 	void stopEvHgtFusion();
 
 	void updateGroundEffect();
@@ -1077,11 +1042,6 @@ private:
 	void startGpsYawFusion(const gpsSample &gps_sample);
 	void stopGpsYawFusion();
 
-	void startEvPosFusion();
-	void startEvVelFusion();
-	void startEvYawFusion();
-
-	void stopEvFusion();
 	void stopEvPosFusion();
 	void stopEvVelFusion();
 	void stopEvYawFusion();
@@ -1108,11 +1068,14 @@ private:
 	EKFGSF_yaw _yawEstimator{};
 
 	uint8_t _height_sensor_ref{HeightSensor::UNKNOWN};
+	uint8_t _position_sensor_ref{static_cast<uint8_t>(PositionSensor::GNSS)};
 
 	HeightBiasEstimator _baro_b_est{HeightSensor::BARO, _height_sensor_ref};
 	HeightBiasEstimator _gps_hgt_b_est{HeightSensor::GNSS, _height_sensor_ref};
 	HeightBiasEstimator _rng_hgt_b_est{HeightSensor::RANGE, _height_sensor_ref};
 	HeightBiasEstimator _ev_hgt_b_est{HeightSensor::EV, _height_sensor_ref};
+
+	PositionBiasEstimator _ev_pos_b_est{static_cast<uint8_t>(PositionSensor::EV), _position_sensor_ref};
 
 	int64_t _ekfgsf_yaw_reset_time{0};	///< timestamp of last emergency yaw reset (uSec)
 	uint8_t _ekfgsf_yaw_reset_count{0};	// number of times the yaw has been reset to the EKF-GSF estimate

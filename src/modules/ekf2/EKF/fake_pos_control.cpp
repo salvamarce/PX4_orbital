@@ -87,7 +87,6 @@ void Ekf::startFakePosFusion()
 	if (!_control_status.flags.fake_pos) {
 		ECL_INFO("start fake position fusion");
 		_control_status.flags.fake_pos = true;
-		_fuse_hpos_as_odom = false; // TODO: needed?
 		resetFakePosFusion();
 	}
 }

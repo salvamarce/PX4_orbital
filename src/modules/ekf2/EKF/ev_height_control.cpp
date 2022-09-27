@@ -38,36 +38,50 @@
 
 #include "ekf.h"
 
-void Ekf::controlEvHeightFusion()
+void Ekf::controlEvHeightFusion(const extVisionSample &ev_sample)
 {
-	if (!(_params.height_sensor_ref == HeightSensor::EV)) { // TODO: replace by EV control parameter
+	_ev_hgt_b_est.predict(_dt_ekf_avg);
+
+	if (!(_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VPOS))) {
 		stopEvHgtFusion();
 		return;
 	}
 
-	_ev_hgt_b_est.predict(_dt_ekf_avg);
-
 	const bool ev_intermittent = !isNewestSampleRecent(_time_last_ext_vision_buffer_push, 2 * EV_MAX_INTERVAL);
 
 	if (_ev_data_ready) {
-		const bool position_valid = PX4_ISFINITE(_ev_sample_delayed.pos(2));
-		const bool continuing_conditions_passing = !ev_intermittent && position_valid;
+
+		// determine if we should use the horizontal position observations
+		const bool continuing_conditions_passing = !ev_intermittent && PX4_ISFINITE(ev_sample.pos(2));
 		const bool starting_conditions_passing = continuing_conditions_passing;
 
 		if (_control_status.flags.ev_hgt) {
 			if (continuing_conditions_passing) {
-				fuseEvHgt();
+				/* fuseEvHgt(); */ // Done in fuseEvPos
 
-				const bool reset = (_ev_sample_delayed.reset_counter != _ev_sample_delayed_prev.reset_counter);
-				if (isHeightResetRequired() || reset ) {
-					resetHeightToEv();
+				const bool ev_reset = (ev_sample.reset_counter != _ev_sample_delayed_prev.reset_counter)
+							  && (fabsf(ev_sample.pos(2) - _ev_sample_delayed_prev.pos(2)) > 0.01f);
+
+				const bool is_fusion_failing = isTimedOut(_aid_src_ev_pos.time_last_fuse[2], _params.hgt_fusion_timeout_max);
+
+				if (isHeightResetRequired()) {
+					// All height sources are failing
+					resetHeightToEv(ev_sample);
 
 					// If the sample has a valid vertical velocity estimate, use it
-					if (PX4_ISFINITE(_ev_sample_delayed.vel(2))) {
-						resetVerticalVelocityToEv(_ev_sample_delayed);
-					} else {
-						resetVerticalVelocityToZero();
+					if (PX4_ISFINITE(ev_sample.vel(2))) {
+						resetVerticalVelocityTo(ev_sample.vel(2));
+
+						// the state variance is the same as the observation
+						P.uncorrelateCovarianceSetVariance<1>(6, ev_sample.velVar(2));
 					}
+
+				} else if (ev_reset && isOnlyActiveSourceOfVerticalPositionAiding(_control_status.flags.ev_hgt)) {
+					resetHeightToEv(ev_sample);
+
+				} else if (is_fusion_failing) {
+					// Some other height source is still working
+					stopEvHgtFusion();
 				}
 
 			} else {
@@ -76,7 +90,7 @@ void Ekf::controlEvHeightFusion()
 
 		} else {
 			if (starting_conditions_passing) {
-				startEvHgtFusion();
+				startEvHgtFusion(ev_sample);
 			}
 		}
 
@@ -85,16 +99,20 @@ void Ekf::controlEvHeightFusion()
 	}
 }
 
-void Ekf::startEvHgtFusion()
+void Ekf::startEvHgtFusion(const extVisionSample &ev_sample)
 {
 	if (!_control_status.flags.ev_hgt) {
+
 		if (_params.height_sensor_ref == HeightSensor::EV) {
 			_rng_hgt_b_est.reset();
 			_height_sensor_ref = HeightSensor::EV;
-			resetHeightToEv();
+			resetHeightToEv(ev_sample);
 
 		} else {
-			_ev_hgt_b_est.setBias(-_state.pos(2) + _ev_sample_delayed.pos(2));
+			_ev_hgt_b_est.setBias(-_state.pos(2) + ev_sample.pos(2));
+
+			// Reset the timeout value here because the fusion isn't done at the same place and would immediately trigger a timeout
+			_aid_src_ev_pos.time_last_fuse[2] = _imu_sample_delayed.time_us;
 		}
 
 		_control_status.flags.ev_hgt = true;
@@ -103,24 +121,27 @@ void Ekf::startEvHgtFusion()
 	}
 }
 
-void Ekf::resetHeightToEv()
+void Ekf::resetHeightToEv(const extVisionSample &ev_sample)
 {
 	ECL_INFO("reset height to EV");
 	_information_events.flags.reset_hgt_to_ev = true;
 
-	resetVerticalPositionTo(_ev_sample_delayed.pos(2) - _ev_hgt_b_est.getBias());
+	resetVerticalPositionTo(ev_sample.pos(2) - _ev_hgt_b_est.getBias());
 
 	// the state variance is the same as the observation
-	P.uncorrelateCovarianceSetVariance<1>(9, fmaxf(_ev_sample_delayed.posVar(2), sq(0.01f)));
+	P.uncorrelateCovarianceSetVariance<1>(9, fmaxf(ev_sample.posVar(2), sq(0.01f)));
 
 	_baro_b_est.setBias(_baro_b_est.getBias() + _state_reset_status.posD_change);
 	_gps_hgt_b_est.setBias(_gps_hgt_b_est.getBias() + _state_reset_status.posD_change);
 	_rng_hgt_b_est.setBias(_rng_hgt_b_est.getBias() + _state_reset_status.posD_change);
+
+	_aid_src_ev_pos.time_last_fuse[2] = _imu_sample_delayed.time_us;
 }
 
 void Ekf::stopEvHgtFusion()
 {
 	if (_control_status.flags.ev_hgt) {
+
 		if (_height_sensor_ref == HeightSensor::EV) {
 			_height_sensor_ref = HeightSensor::UNKNOWN;
 		}
