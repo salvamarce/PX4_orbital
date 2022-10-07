@@ -30,6 +30,11 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 ############################################################################
-
-add_subdirectory(sagetech_mxs)
-add_subdirectory(uavionix)
+px4_add_module(
+	MODULE drivers__transponder__uavionix
+	MAIN uavionix
+	SRCS
+		uavionix.cpp
+	DEPENDS
+		adsb
+	)
