@@ -1036,8 +1036,6 @@ private:
 
 	void startGpsFusion(const gpsSample &gps_sample);
 	void stopGpsFusion();
-	void stopGpsPosFusion();
-	void stopGpsVelFusion();
 
 	void startGpsYawFusion(const gpsSample &gps_sample);
 	void stopGpsYawFusion();

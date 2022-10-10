@@ -1396,8 +1396,10 @@ void Ekf::startGpsFusion(const gpsSample &gps_sample)
 void Ekf::stopGpsFusion()
 {
 	if (_control_status.flags.gps) {
-		stopGpsPosFusion();
-		stopGpsVelFusion();
+		ECL_INFO("stopping GPS position and velocity fusion");
+
+		resetEstimatorAidStatus(_aid_src_gnss_pos);
+		resetEstimatorAidStatus(_aid_src_gnss_vel);
 
 		_control_status.flags.gps = false;
 	}
@@ -1409,24 +1411,6 @@ void Ekf::stopGpsFusion()
 	// We do not need to know the true North anymore
 	// EV yaw can start again
 	_inhibit_ev_yaw_use = false;
-}
-
-void Ekf::stopGpsPosFusion()
-{
-	if (_control_status.flags.gps) {
-		ECL_INFO("stopping GPS position fusion");
-		_control_status.flags.gps = false;
-		stopGpsHgtFusion();
-
-		resetEstimatorAidStatus(_aid_src_gnss_pos);
-	}
-}
-
-void Ekf::stopGpsVelFusion()
-{
-	ECL_INFO("stopping GPS velocity fusion");
-
-	resetEstimatorAidStatus(_aid_src_gnss_vel);
 }
 
 void Ekf::startGpsYawFusion(const gpsSample &gps_sample)

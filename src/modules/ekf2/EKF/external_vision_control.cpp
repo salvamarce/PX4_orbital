@@ -143,52 +143,90 @@ void Ekf::controlEvPosFusion(const extVisionSample &ev_sample)
 
 		updatePositionAidSrcStatus(ev_sample.time_us, ev_pos, obs_var, fmaxf(_params.ev_pos_innov_gate, 1.f), _aid_src_ev_pos);
 
-
-		// update the bias estimator before updating the main filter but after
-		// using its current state to compute the vertical position innovation
-		_ev_pos_b_est.setMaxStateNoise(Vector2f(measurement_var));
-		_ev_pos_b_est.setProcessNoiseSpectralDensity(_params.ev_hgt_bias_nsd); // TODO
-		_ev_pos_b_est.fuseBias(Vector2f(pos.xy()) - Vector2f(_state.pos.xy()), Vector2f(measurement_var.xy()) + Vector2f(P(7, 7), P(8, 8)));
-
-		_ev_hgt_b_est.setMaxStateNoise(measurement_var(2));
-		_ev_hgt_b_est.setProcessNoiseSpectralDensity(_params.ev_hgt_bias_nsd);
-		_ev_hgt_b_est.fuseBias(pos(2) - _state.pos(2), measurement_var(2) + P(9, 9));
-
-
-
 		// determine if we should use the horizontal position observations
 		const bool quality_sufficient = ((_params.ev_quality_minimum <= 0) || ((_params.ev_quality_minimum > 0)
 						 && (ev_sample.quality >= _params.ev_quality_minimum)));
 
+		// update the bias estimator before updating the main filter but after
+		// using its current state to compute the vertical position innovation
+		if (quality_sufficient
+		    && PX4_ISFINITE(pos(0)) && PX4_ISFINITE(measurement_var(0))
+		    && PX4_ISFINITE(pos(1)) && PX4_ISFINITE(measurement_var(1))
+		   ) {
+			_ev_pos_b_est.setMaxStateNoise(Vector2f(measurement_var));
+			_ev_pos_b_est.setProcessNoiseSpectralDensity(_params.ev_hgt_bias_nsd); // TODO
+			_ev_pos_b_est.fuseBias(Vector2f(pos.xy()) - Vector2f(_state.pos.xy()), Vector2f(measurement_var.xy()) + Vector2f(P(7, 7), P(8, 8)));
+		}
+
+		if (quality_sufficient
+		    && PX4_ISFINITE(pos(2)) && PX4_ISFINITE(measurement_var(2))
+		   ) {
+			_ev_hgt_b_est.setMaxStateNoise(measurement_var(2));
+			_ev_hgt_b_est.setProcessNoiseSpectralDensity(_params.ev_hgt_bias_nsd);
+			_ev_hgt_b_est.fuseBias(pos(2) - _state.pos(2), measurement_var(2) + P(9, 9));
+		}
+
 		const bool continuing_conditions_passing = isNewestSampleRecent(_time_last_ext_vision_buffer_push, 2 * EV_MAX_INTERVAL)
 				&& _control_status.flags.tilt_align
-				&& ((_params.ev_ctrl & static_cast<int32_t>(EvCtrl::HPOS)) || (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VPOS)));
+				&& (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::HPOS));
 
 		const bool starting_conditions_passing = continuing_conditions_passing
 				&& quality_sufficient;
+
+
+		if (!_control_status.flags.ev_pos) {
+			if (starting_conditions_passing) {
+				// Try to activate EV position fusion
+				if (!_control_status.flags.ev_pos) {
+					_control_status.flags.ev_pos = true;
+
+					if (!_control_status.flags.gps) {
+						_information_events.flags.reset_pos_to_vision = true;
+						ECL_INFO("reset horiztonal position to EV");
+						resetHorizontalPositionTo(Vector2f(ev_pos));
+						P.uncorrelateCovarianceSetVariance<2>(7, obs_var.xy());
+					}
+
+					_information_events.flags.starting_vision_pos_fusion = true;
+					ECL_INFO("starting vision pos fusion");
+				}
+
+				if (_control_status.flags.ev_pos) {
+					_nb_ev_pos_reset_available = 3;
+				}
+			}
+		}
 
 		if (_control_status.flags.ev_pos || _control_status.flags.ev_hgt) {
 			if (continuing_conditions_passing) {
 
 				const bool ev_pos_reset = (ev_sample.reset_counter != _ev_sample_delayed_prev.reset_counter)
-					  && (ev_sample.pos - _ev_sample_delayed_prev.pos).longerThan(0.01f);
+							  && (ev_sample.pos - _ev_sample_delayed_prev.pos).longerThan(0.01f);
 
-				if (ev_pos_reset && !_control_status.flags.gps) {
+				if (ev_pos_reset && !_control_status.flags.gps && quality_sufficient) {
 					// reset count changed in EV sample, reset vision position unless GPS is active
 					_information_events.flags.reset_pos_to_vision = true;
 					ECL_INFO("reset horizontal position to EV");
 					resetHorizontalPositionTo(Vector2f(ev_pos));
 					P.uncorrelateCovarianceSetVariance<2>(7, obs_var.xy());
 
+					// TODO: wait for acceptable quality to trigger reset?
+
 				} else {
-					_aid_src_ev_pos.fusion_enabled[0] = quality_sufficient && (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::HPOS)) && _control_status.flags.ev_pos;
-					_aid_src_ev_pos.fusion_enabled[1] = quality_sufficient && (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::HPOS)) && _control_status.flags.ev_pos;
-					_aid_src_ev_pos.fusion_enabled[2] = quality_sufficient && (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VPOS)) && _control_status.flags.ev_hgt;
+					if (!quality_sufficient) {
+						_aid_src_ev_pos.innovation_rejected[0] = true;
+						_aid_src_ev_pos.innovation_rejected[1] = true;
+						_aid_src_ev_pos.innovation_rejected[2] = true;
+					}
+
+					_aid_src_ev_pos.fusion_enabled[0] = (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::HPOS)) && _control_status.flags.ev_pos;
+					_aid_src_ev_pos.fusion_enabled[1] = (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::HPOS)) && _control_status.flags.ev_pos;
+					_aid_src_ev_pos.fusion_enabled[2] = (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VPOS)) && _control_status.flags.ev_hgt;
 					fusePosition(_aid_src_ev_pos);
 
 					bool is_fusion_failing = _control_status.flags.ev_pos
-							&& (isTimedOut(_aid_src_ev_pos.time_last_fuse[0], _params.reset_timeout_max)
-								 || isTimedOut(_aid_src_ev_pos.time_last_fuse[1], _params.reset_timeout_max));
+								 && (isTimedOut(_aid_src_ev_pos.time_last_fuse[0], _params.reset_timeout_max)
+								     || isTimedOut(_aid_src_ev_pos.time_last_fuse[1], _params.reset_timeout_max));
 
 					if (is_fusion_failing) {
 						if (_nb_ev_pos_reset_available > 0) {
@@ -219,28 +257,6 @@ void Ekf::controlEvPosFusion(const extVisionSample &ev_sample)
 			} else {
 				// Stop fusion but do not declare it faulty
 				stopEvPosFusion();
-			}
-
-		} else {
-			if (starting_conditions_passing) {
-				// Try to activate EV position fusion
-				if (!_control_status.flags.ev_pos) {
-					_control_status.flags.ev_pos = true;
-
-					if (!_control_status.flags.gps) {
-						_information_events.flags.reset_pos_to_vision = true;
-						ECL_INFO("reset horiztonal position to EV");
-						resetHorizontalPositionTo(Vector2f(ev_pos));
-						P.uncorrelateCovarianceSetVariance<2>(7, obs_var.xy());
-					}
-
-					_information_events.flags.starting_vision_pos_fusion = true;
-					ECL_INFO("starting vision pos fusion");
-				}
-
-				if (_control_status.flags.ev_pos) {
-					_nb_ev_pos_reset_available = 3;
-				}
 			}
 		}
 
@@ -324,16 +340,25 @@ void Ekf::controlEvVelFusion(const extVisionSample &ev_sample)
 				const bool ev_vel_reset = (ev_sample.reset_counter != _ev_sample_delayed_prev.reset_counter)
 							  && (ev_sample.vel - _ev_sample_delayed_prev.vel).longerThan(0.01f);
 
-				if (ev_vel_reset && isOnlyActiveSourceOfHorizontalAiding(_control_status.flags.ev_vel)) {
+				if (ev_vel_reset && isOnlyActiveSourceOfHorizontalAiding(_control_status.flags.ev_vel) && quality_sufficient) {
 					_information_events.flags.reset_vel_to_vision = true;
 					ECL_INFO("reset to vision velocity");
 					resetVelocityTo(vel);
 					P.uncorrelateCovarianceSetVariance<3>(4, vel_cov.diag());
 
 				} else {
-					_aid_src_ev_vel.fusion_enabled[0] = PX4_ISFINITE(vel(0)) && quality_sufficient && (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VEL));
-					_aid_src_ev_vel.fusion_enabled[1] = PX4_ISFINITE(vel(1)) && quality_sufficient && (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VEL));
-					_aid_src_ev_vel.fusion_enabled[2] = PX4_ISFINITE(vel(2)) && quality_sufficient && (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VEL));
+					if (!quality_sufficient) {
+						_aid_src_ev_vel.innovation_rejected[0] = true;
+						_aid_src_ev_vel.innovation_rejected[1] = true;
+						_aid_src_ev_vel.innovation_rejected[2] = true;
+					}
+
+					_aid_src_ev_vel.fusion_enabled[0] = (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VEL))
+									    && _control_status.flags.ev_vel;
+					_aid_src_ev_vel.fusion_enabled[1] = (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VEL))
+									    && _control_status.flags.ev_vel;
+					_aid_src_ev_vel.fusion_enabled[2] = (_params.ev_ctrl & static_cast<int32_t>(EvCtrl::VEL))
+									    && _control_status.flags.ev_vel;
 					fuseVelocity(_aid_src_ev_vel);
 
 					const bool is_fusion_failing = isTimedOut(_aid_src_ev_vel.time_last_fuse[0], _params.reset_timeout_max)
@@ -341,7 +366,7 @@ void Ekf::controlEvVelFusion(const extVisionSample &ev_sample)
 								       || isTimedOut(_aid_src_ev_vel.time_last_fuse[2], _params.reset_timeout_max);
 
 					if (is_fusion_failing) {
-						if (_nb_ev_vel_reset_available > 0) {
+						if (_nb_ev_vel_reset_available > 0 && quality_sufficient) {
 							// Data seems good, attempt a reset
 							_information_events.flags.reset_vel_to_vision = true;
 							ECL_INFO("reset to vision velocity");
@@ -446,21 +471,27 @@ void Ekf::controlEvYawFusion(const extVisionSample &ev_sample)
 				const bool ev_yaw_reset = (ev_sample.reset_counter != _ev_sample_delayed_prev.reset_counter)
 							  && (fabsf(wrap_pi(getEulerYaw(ev_sample.quat) - getEulerYaw(_ev_sample_delayed_prev.quat))) > math::radians(10.f));
 
-				if (ev_yaw_reset) {
+				if (ev_yaw_reset && quality_sufficient) {
 					// reset count changed in EV sample
 					resetQuatStateYaw(measured_hdg, ev_yaw_obs_var);
+
+					// TODO: wait for acceptable quality to trigger reset?
 
 				} else {
 					_aid_src_ev_yaw.fusion_enabled = true;
 
-					if (quality_sufficient) {
+					if (!quality_sufficient) {
+						_aid_src_ev_yaw.innovation_rejected = true;
+						_aid_src_ev_yaw.fused = false;
+
+					} else {
 						fuseYaw(_aid_src_ev_yaw.innovation, _aid_src_ev_yaw.observation_variance, _aid_src_ev_yaw);
 					}
 
 					const bool is_fusion_failing = isTimedOut(_aid_src_ev_yaw.time_last_fuse, _params.reset_timeout_max);
 
 					if (is_fusion_failing) {
-						if (_nb_ev_yaw_reset_available > 0) {
+						if (_nb_ev_yaw_reset_available > 0 && quality_sufficient) {
 							// Data seems good, attempt a reset
 							const float yaw_new = getEulerYaw(ev_sample.quat);
 							const float yaw_new_variance = fmaxf(ev_sample.angVar, sq(1.e-2f));
@@ -547,6 +578,7 @@ void Ekf::stopEvPosFusion()
 	if (_control_status.flags.ev_pos) {
 		ECL_INFO("stopping EV pos fusion");
 		_control_status.flags.ev_pos = false;
+		resetEstimatorAidStatusFlags(_aid_src_ev_pos);
 	}
 }
 
@@ -555,6 +587,7 @@ void Ekf::stopEvVelFusion()
 	if (_control_status.flags.ev_vel) {
 		ECL_INFO("stopping EV vel fusion");
 		_control_status.flags.ev_vel = false;
+		resetEstimatorAidStatusFlags(_aid_src_ev_vel);
 	}
 }
 
@@ -563,5 +596,6 @@ void Ekf::stopEvYawFusion()
 	if (_control_status.flags.ev_yaw) {
 		ECL_INFO("stopping EV yaw fusion");
 		_control_status.flags.ev_yaw = false;
+		resetEstimatorAidStatusFlags(_aid_src_ev_yaw);
 	}
 }
