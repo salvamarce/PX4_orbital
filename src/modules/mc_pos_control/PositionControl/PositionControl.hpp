@@ -44,6 +44,9 @@
 #include <uORB/topics/trajectory_setpoint.h>
 #include <uORB/topics/vehicle_attitude_setpoint.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+/*** CUSTOM ***/
+#include <uORB/topics/orbstab_pos_to_att.h>
+/*** END-CUSTOM ***/
 
 struct PositionControlStates {
 	matrix::Vector3f position;
@@ -84,6 +87,14 @@ public:
 	 * @param P 3D vector of proportional gains for x,y,z axis
 	 */
 	void setPositionGains(const matrix::Vector3f &P) { _gain_pos_p = P; }
+
+	/*** CUSTOM ***/
+	/**
+	 * Set the position control gains
+	 * @param P 3D vector of proportional gains for x,y,z axis
+	 */
+	void setOrbstabGains(const float kl1, const float kp) { _gain_orbstab_kl1 = kl1; _gain_orbstab_kp = kp; }
+	/*** END-CUSTOM ***/
 
 	/**
 	 * Set the velocity control gains
@@ -157,6 +168,14 @@ public:
 	 */
 	bool update(const float dt);
 
+	/*** CUSTOM ***/
+	/**
+	 * Compute some parts of the orbital stabilization controller that depend on linear errors
+	 * @return true if update succeeded and output setpoint is executable, false if not
+	 */
+	bool updateOrbstab(orbstab_pos_to_att_s &orbstab, const float radius);
+	/*** END-CUSTOM ***/
+
 	/**
 	 * Set the integral term in xy to 0.
 	 * @see _vel_int
@@ -200,6 +219,10 @@ private:
 	matrix::Vector3f _gain_vel_p; ///< Velocity control proportional gain
 	matrix::Vector3f _gain_vel_i; ///< Velocity control integral gain
 	matrix::Vector3f _gain_vel_d; ///< Velocity control derivative gain
+	/*** CUSTOM ***/
+	float _gain_orbstab_kl1;
+	float _gain_orbstab_kp;
+	/*** END-CUSTOM ***/
 
 	// Limits
 	float _lim_vel_horizontal{}; ///< Horizontal velocity limit with feed forward and position control

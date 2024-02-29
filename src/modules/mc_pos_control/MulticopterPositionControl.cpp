@@ -55,7 +55,7 @@ MulticopterPositionControl::MulticopterPositionControl(bool vtol) :
 	_takeoff_status_pub.advertise();
 
 	/*** CUSTOM ***/
-	_tilting_servo_setpoint_pub.advertise();
+	_orbstab_pos_to_att_pub.advertise();
 	/*** END-CUSTOM ***/
 }
 
@@ -360,6 +360,21 @@ void MulticopterPositionControl::Run()
 			}
 		}
 
+		/*** CUSTOM ***/
+		if(_vehicle_status_sub.updated() ){
+			_vehicle_status_sub.copy(&_status);
+
+			if(_status.nav_state == vehicle_status_s::NAVIGATION_STATE_ORBIT){
+
+				if(_orbit_status_sub.updated()){
+						orbit_status_s orbit_status;
+						_orbit_status_sub.update(&orbit_status);
+						_orbit_radius = orbit_status.radius;
+				}
+			}
+		}
+		/*** END-CUSTOM ***/
+
 		_vehicle_land_detected_sub.update(&_vehicle_land_detected);
 
 		if (_param_mpc_use_hte.get()) {
@@ -563,70 +578,20 @@ void MulticopterPositionControl::Run()
 			_control.getAttitudeSetpoint(attitude_setpoint);
 
 			/*** CUSTOM ***/
-			if(_param_airframe.get() == 13 ){ //If tilting_multirotors
+			if(_status.nav_state == vehicle_status_s::NAVIGATION_STATE_ORBIT){
 
-				/* Evaluate forces for fully actuated tilting multirotor*/
-				if(_param_tilting_type.get() == 1){
-					const float sin_yaw = sinf(attitude_setpoint.yaw_body);
-					const float cos_yaw = cosf(attitude_setpoint.yaw_body);
+				_control.setOrbstabGains(_param_orbstab_gain_kl1.get(), _param_orbstab_gain_kp.get());
 
-					attitude_setpoint.thrust_body[0] = cos_yaw * local_pos_sp.thrust[0] + sin_yaw * local_pos_sp.thrust[1];
-					attitude_setpoint.thrust_body[0] = math::constrain(attitude_setpoint.thrust_body[0],
-								-1.0f*_param_f_max.get(), _param_f_max.get());
-
-					attitude_setpoint.thrust_body[1] = -sin_yaw * local_pos_sp.thrust[0] + cos_yaw * local_pos_sp.thrust[1];
-					attitude_setpoint.thrust_body[1] = math::constrain(attitude_setpoint.thrust_body[1],
-								-1.0f*_param_f_max.get(), _param_f_max.get());
+				orbstab_pos_to_att_s orbstab_msg;
+				if(_control.updateOrbstab(orbstab_msg,_orbit_radius)){
+					PX4_WARN("radius: %f", (double)_orbit_radius);
+					orbstab_msg.timestamp = hrt_absolute_time();
+					_orbstab_pos_to_att_pub.publish(orbstab_msg);
 				}
-
-				/* Consider the desired body angle */
-				if(_tilting_mc_angles_sub.updated()){
-
-					tilting_mc_desired_angles_s tilting_mc_angles_sp;
-
-					if (_tilting_mc_angles_sub.copy(&tilting_mc_angles_sp) &&
-					    (tilting_mc_angles_sp.timestamp > _last_angles_setpoint) ){
-
-						// H-tilting multirotor
-						if(_param_tilting_type.get() == 0 && _param_mpc_pitch_on_tilt.get()){
-
-							_tilting_mc_pitch_sp = math::constrain(tilting_mc_angles_sp.pitch_body,
-								_param_des_pitch_min.get(), _param_des_pitch_max.get());
-
-						}
-						else if(_param_tilting_type.get() == 1){
-
-							_tilting_mc_pitch_sp = math::constrain(tilting_mc_angles_sp.pitch_body,
-								_param_des_pitch_min.get(), _param_des_pitch_max.get());
-
-							_tilting_mc_roll_sp = math::constrain(tilting_mc_angles_sp.roll_body,
-								_param_des_roll_min.get(), _param_des_roll_max.get());
-
-						}
-
-						_last_angles_setpoint = tilting_mc_angles_sp.timestamp;
-					}
-
-				}
-
-				/* For the H-tilting multirotor the tilt_servo angle must always be updated */
-				if(_param_tilting_type.get() == 0 && _param_mpc_pitch_on_tilt.get()){
-
-					_tilting_servo_sp.angle[0] = attitude_setpoint.pitch_body - _tilting_mc_pitch_sp;
-					_tilting_mc_roll_sp = attitude_setpoint.roll_body;
-
-					_tilting_servo_sp.timestamp = hrt_absolute_time();
-					_tilting_servo_setpoint_pub.publish(_tilting_servo_sp);
-				}
-
-				attitude_setpoint.roll_body = _tilting_mc_roll_sp;
-				attitude_setpoint.pitch_body = _tilting_mc_pitch_sp;
+				else
+					// PX4_WARN("Orbstab output not valid!!");
 
 			}
-
-			Quatf q_des = Eulerf(attitude_setpoint.roll_body, attitude_setpoint.pitch_body, attitude_setpoint.yaw_body);
-
-			q_des.copyTo(attitude_setpoint.q_d);
 
 			/*** END-CUSTOM ***/
 

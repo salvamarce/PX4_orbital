@@ -65,8 +65,9 @@
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
 /*** CUSTOM ***/
-#include <uORB/topics/tilting_mc_desired_angles.h>
-#include <uORB/topics/tilting_servo_sp.h>
+#include <uORB/topics/vehicle_status.h>
+#include <uORB/topics/orbstab_pos_to_att.h>
+#include <uORB/topics/orbit_status.h>
 /*** END-CUSTOM ***/
 
 using namespace time_literals;
@@ -111,12 +112,13 @@ private:
 	uORB::Subscription _vehicle_land_detected_sub{ORB_ID(vehicle_land_detected)};
 
 	// /*** CUSTOM ***/
-	uORB::Subscription _tilting_mc_angles_sub {ORB_ID(tilting_mc_desired_angles)};
-	uORB::Publication<tilting_servo_sp_s> _tilting_servo_setpoint_pub {ORB_ID(tilting_servo_setpoint)};
-	float _tilting_mc_roll_sp{0.0f};
-	float _tilting_mc_pitch_sp{0.0f};
-	tilting_servo_sp_s _tilting_servo_sp {};
-	hrt_abstime _last_angles_setpoint{0};
+	uORB::Subscription _vehicle_status_sub{ORB_ID(vehicle_status)};
+	uORB::Subscription _orbit_status_sub{ORB_ID(orbit_status)};
+	uORB::Publication<orbstab_pos_to_att_s> _orbstab_pos_to_att_pub{ORB_ID(orbstab_pos_to_att)};
+	// uORB::Publication<tilting_servo_sp_s> _tilting_servo_setpoint_pub {ORB_ID(tilting_servo_setpoint)};
+	vehicle_status_s _status{};
+	float _orbit_radius{1};
+
 	// /*** END-CUSTOM ***/
 
 	hrt_abstime _time_stamp_last_loop{0};		/**< time stamp of last loop iteration */
@@ -191,14 +193,8 @@ private:
 		(ParamFloat<px4::params::MPC_Z_VEL_ALL>)    _param_mpc_z_vel_all,
 
 		/*** CUSTOM ***/
-		(ParamInt<px4::params::CA_TILTING_TYPE>)    _param_tilting_type, 	/**< 0:h-tilting, 1:omnidirectional*/
-		(ParamInt<px4::params::CA_AIRFRAME>)	    _param_airframe, 		/**< 11: tilting_multirotors */
-		(ParamInt<px4::params::MC_PITCH_ON_TILT>)   _param_mpc_pitch_on_tilt,   /**< map the pitch angle on the tilt */
-		(ParamFloat<px4::params::MC_MAX_FXY>)       _param_f_max,		/**< maximum desired horizontal forces */
-		(ParamFloat<px4::params::MC_DES_PITCH_MAX>) _param_des_pitch_max,	/**< maximum desired pitch for tilting drones*/
-		(ParamFloat<px4::params::MC_DES_PITCH_MIN>) _param_des_pitch_min,	/**< minimum desired pitch for tilting drones*/
-		(ParamFloat<px4::params::MC_DES_ROLL_MAX>)  _param_des_roll_max,	/**< maximum desired roll for tilting drones*/
-		(ParamFloat<px4::params::MC_DES_ROLL_MIN>)  _param_des_roll_min		/**< minimum desired roll for tilting drones*/
+		(ParamFloat<px4::params::ORBSTAB_GAIN_KL1>)	_param_orbstab_gain_kl1,
+		(ParamFloat<px4::params::ORBSTAB_GAIN_KP>)	_param_orbstab_gain_kp
 
 		/*** END-CUSTOM ***/
 	);
