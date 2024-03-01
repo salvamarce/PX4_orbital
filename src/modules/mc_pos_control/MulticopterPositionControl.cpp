@@ -55,7 +55,7 @@ MulticopterPositionControl::MulticopterPositionControl(bool vtol) :
 	_takeoff_status_pub.advertise();
 
 	/*** CUSTOM ***/
-	_orbstab_pos_to_att_pub.advertise();
+	// _orbstab_pos_to_att_pub.advertise();
 	/*** END-CUSTOM ***/
 }
 
@@ -588,7 +588,7 @@ void MulticopterPositionControl::Run()
 					_orbstab_pos_to_att_pub.publish(orbstab_msg);
 				}
 				else
-					PX4_ERR("Orbstab output not valid!!");
+					PX4_ERR("Position Orbstab output not valid!!");
 
 			}
 
