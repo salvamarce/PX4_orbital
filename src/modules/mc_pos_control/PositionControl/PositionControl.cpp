@@ -136,10 +136,10 @@ bool PositionControl::updateOrbstab(orbstab_pos_to_att_s &orbstab, const float r
 		}
 
 		orbstab.ues1 = -orbstab.acc_sp[2] + _gain_orbstab_kl1 * orbstab.pos_error[2];
-		orbstab.ues4_1 = (orbstab.acc_sp[0] * orbstab.vel_error[0] + orbstab.acc_sp[1] * orbstab.vel_error[1]) * powf(radius,4)
+		orbstab.ues4_1 = (orbstab.acc_sp[0] * orbstab.vel_error[0] + orbstab.acc_sp[1] * orbstab.vel_error[1])
 			-2*_gain_orbstab_kp * (orbstab.drone_vel[0] * orbstab.pos_error[0] + orbstab.drone_vel[1] * orbstab.pos_error[1])
-			* (powf(orbstab.pos_error[0],2) + powf(orbstab.pos_error[1],2) - powf(radius,2) );
-		orbstab.ues4_2 = (orbstab.acc_sp[2] - _gain_orbstab_kl1 * orbstab.pos_error[2]) * powf(radius,4);
+			* (powf(orbstab.pos_error[0],2) + powf(orbstab.pos_error[1],2) - powf(radius,2) ) * (1.0f/ powf(radius,4));
+		orbstab.ues4_2 = (orbstab.acc_sp[2] - _gain_orbstab_kl1 * orbstab.pos_error[2]);
 
 	}
 

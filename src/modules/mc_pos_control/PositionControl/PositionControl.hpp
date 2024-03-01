@@ -92,7 +92,8 @@ public:
 	/*** CUSTOM ***/
 	/**
 	 * Set the position control gains
-	 * @param P 3D vector of proportional gains for x,y,z axis
+	 * @param kl1 scalar gain
+	 * @param kp scalar gain
 	 */
 	void setOrbstabGains(const float kl1, const float kp) { _gain_orbstab_kl1 = kl1; _gain_orbstab_kp = kp; }
 	/*** END-CUSTOM ***/
@@ -172,6 +173,8 @@ public:
 	/*** CUSTOM ***/
 	/**
 	 * Compute some parts of the orbital stabilization controller that depend on linear errors
+	 * @param orbstab setpoint to send to attitude ctrl for orbital stabilization
+	 * @param radius value of the orbit's radius to follow
 	 * @return true if update succeeded and output setpoint is executable, false if not
 	 */
 	bool updateOrbstab(orbstab_pos_to_att_s &orbstab, const float radius);
