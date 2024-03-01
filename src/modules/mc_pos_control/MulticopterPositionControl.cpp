@@ -588,7 +588,7 @@ void MulticopterPositionControl::Run()
 					_orbstab_pos_to_att_pub.publish(orbstab_msg);
 				}
 				else
-					PX4_ERROR("Orbstab output not valid!!");
+					PX4_ERR("Orbstab output not valid!!");
 
 			}
 
