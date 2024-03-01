@@ -50,6 +50,10 @@
 
 #include <matrix/matrix/math.hpp>
 #include <mathlib/math/Limits.hpp>
+/*** CUSTOM ***/
+#include <uORB/topics/orbstab_pos_to_att.h>
+#include <uORB/topics/orbstab_att_to_rate.h>
+/*** END-CUSTOM ***/
 
 class AttitudeControl
 {
@@ -63,6 +67,16 @@ public:
 	 * @param yaw_weight A fraction [0,1] deprioritizing yaw compared to roll and pitch
 	 */
 	void setProportionalGain(const matrix::Vector3f &proportional_gain, const float yaw_weight);
+
+	/*** CUSTOM ***/
+	/**
+	 * Set orbital stabilization gains
+	 * @param kl2 scalar gain
+	 * @param kt scalar gain
+	 */
+	void setOrbstabGain(const float kl2, const float kt) {_orbstab_gain_kl2 = kl2; _orbstab_gain_kt = kt;}
+
+	/*** END-CUSTOM ***/
 
 	/**
 	 * Set hard limit for output rate setpoints
@@ -100,6 +114,18 @@ public:
 	 */
 	matrix::Vector3f update(const matrix::Quatf &q) const;
 
+	/*** CUSTOM ***/
+	/**
+	 * Run one control loop cycle calculation for orbital stabilization controller
+	 * @param q estimation of the current vehicle attitude unit quaternion
+	 * @param pos_to_att setpoint received from position ctrl
+	 * @param att_to_rate setpoint to send to rate ctrl for orbital stabilization
+	 * @return true if update succeeded and output setpoint is executable, false if not
+	 */
+	bool updateOrbstab(const matrix::Quatf &q, const orbstab_pos_to_att_s &pos_to_att, orbstab_att_to_rate_s &att_to_rate);
+
+	/*** END-CUSTOM ***/
+
 private:
 	matrix::Vector3f _proportional_gain;
 	matrix::Vector3f _rate_limit;
@@ -107,4 +133,9 @@ private:
 
 	matrix::Quatf _attitude_setpoint_q; ///< latest known attitude setpoint e.g. from position control
 	float _yawspeed_setpoint{0.f}; ///< latest known yawspeed feed-forward setpoint
+
+	/*** CUSTOM ***/
+	float _orbstab_gain_kl2{0.0f};
+	float _orbstab_gain_kt{0.0f};
+	/*** END-CUSTOM ***/
 };

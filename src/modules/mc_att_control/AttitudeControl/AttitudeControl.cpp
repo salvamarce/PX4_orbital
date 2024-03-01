@@ -108,3 +108,35 @@ matrix::Vector3f AttitudeControl::update(const Quatf &q) const
 
 	return rate_setpoint;
 }
+
+/*** CUSTOM ***/
+bool AttitudeControl::updateOrbstab(const matrix::Quatf &q, const orbstab_pos_to_att_s &pos_to_att, orbstab_att_to_rate_s &att_to_rate){
+
+	Eulerf euler_des(_attitude_setpoint_q);
+	Eulerf euler_drone(q);
+	float sec_phi = 1/cosf(euler_drone(0));
+	float sec_theta = 1/cosf(euler_drone(1));
+	float phi_err = euler_drone(0) - euler_des(0);
+	float theta_err = euler_drone(1) - euler_des(1);
+	float psi_err = euler_drone(2) - euler_des(2);
+	float sin_phi = sinf(euler_drone(0));
+	float cos_phi = cosf(euler_drone(0));
+	float sin_psi = sinf(euler_drone(2));
+	float cos_psi = cosf(euler_drone(2));
+
+	att_to_rate.ues1 = pos_to_att.ues1 * sec_phi;
+	att_to_rate.ues2 = _orbstab_gain_kl2 * phi_err;
+	att_to_rate.ues3 = _orbstab_gain_kl2 * theta_err;
+	att_to_rate.ues4 = _orbstab_gain_kl2 * psi_err + pos_to_att.ues4_1 + pos_to_att.ues4_2 * ( sec_theta
+		* (pos_to_att.vel_error[1] * cos_psi + pos_to_att.vel_error[0] * sin_psi) * tanf(euler_drone(0))
+		- (pos_to_att.vel_error[0] * cos_psi + pos_to_att.vel_error[1] * sin_psi) * tanf(euler_drone(1)) );
+
+	att_to_rate.ud1 = _orbstab_gain_kt * ( sin_phi * (pos_to_att.vel_error[0] * sin_psi + pos_to_att.vel_error[1] * cos_psi)
+		+ cos_phi * (pos_to_att.vel_error[2] * cosf(euler_drone(1)) + sinf(euler_drone(1))
+		* (pos_to_att.vel_error[0] * cos_psi + pos_to_att.vel_error[1] * sin_psi) ) );
+
+	return PX4_ISFINITE(att_to_rate.ues1) && PX4_ISFINITE(att_to_rate.ues2) && PX4_ISFINITE(att_to_rate.ues3)
+		&& PX4_ISFINITE(att_to_rate.ues4) && PX4_ISFINITE(att_to_rate.ud1);
+
+}
+/*** END-CUSTOM ***/
