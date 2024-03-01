@@ -162,25 +162,21 @@ PARAM_DEFINE_FLOAT(MC_MAN_TILT_TAU, 0.0f);
 // *** CUSTOM ***
 
 /**
- * Map the pitch angle on tilting servo motors
+ * Kl2 gain
  *
- * Setting this parameter to 0 for standard multicopters
- *
- * @boolean
- * @group Multicopter Attitude Control
+ * @min -10
+ * @max 10
+ * @group Orbstab
  */
-PARAM_DEFINE_INT32(MC_PITCH_ON_TILT, 0);
+PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KL2, 1.f);
 
 /**
- * Maximum horizontal force for omnidirectional tilting multirotors
+ * Kt gain
  *
- * @unit N
- * @min 0.0
- * @max 5.0
- * @decimal 2
- * @group Multicopter Attitude Control
-*/
-PARAM_DEFINE_FLOAT(MC_MAX_FXY, 0.15f);
-
+ * @min -10
+ * @max 10
+ * @group Orbstab
+ */
+PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KT, 3.f);
 
 // *** END-CUSTOM ***

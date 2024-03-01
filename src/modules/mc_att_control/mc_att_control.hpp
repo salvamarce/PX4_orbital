@@ -58,8 +58,8 @@
 #include <lib/slew_rate/SlewRate.hpp>
 
 /*** CUSTOM ***/
-#include <uORB/topics/tilting_mc_desired_angles.h>
-#include <uORB/topics/tilting_servo_sp.h>
+#include <uORB/topics/orbstab_pos_to_att.h>
+#include <uORB/topics/orbstab_att_to_rate.h>
 /*** END-CUSTOM ***/
 
 
@@ -147,11 +147,10 @@ private:
 	uint8_t _quat_reset_counter{0};
 
 	/*** CUSTOM ***/
-	uORB::Publication<tilting_servo_sp_s>	_tilting_servo_pub{ORB_ID(tilting_servo_setpoint)};
-	uORB::Subscription _tilting_servo_sub{ORB_ID(tilting_servo_setpoint)};
-	AlphaFilter<float> _man_Fx_input_filter;
-	AlphaFilter<float> _man_Fy_input_filter;
-	float _man_F_max;
+	uORB::Publication<orbstab_att_to_rate_s> _orbstab_att_to_rate_pub{ORB_ID(orbstab_att_to_rate)};
+	uORB::Subscription _orbstab_pos_to_att_sub{ORB_ID(orbstab_pos_to_att)};
+	orbstab_pos_to_att_s _orbstab_pos_to_att_sp{0};
+	bool _orbit_mode{false};
 
 	/*** END-CUSTOM ***/
 
@@ -181,10 +180,8 @@ private:
 
 		/*** CUSTOM ***/
 
-		(ParamInt<px4::params::MC_PITCH_ON_TILT>)   _param_mpc_pitch_on_tilt,   /**< map the pitch angle on the tilt */
-		(ParamInt<px4::params::CA_TILTING_TYPE>)    _param_tilting_type,	/**< 0: H-tilt, 1: omnidirectional */
-		(ParamInt<px4::params::CA_AIRFRAME>)	    _param_airframe,		/**< 11: tilting multirotor */
-		(ParamFloat<px4::params::MC_MAX_FXY>)       _param_f_max		/**< maximum horizontal force for omni drones*/
+		(ParamFloat<px4::params::ORBSTAB_GAIN_KL2>)	_param_orbstab_gain_kl2,
+		(ParamFloat<px4::params::ORBSTAB_GAIN_KT>)	_param_orbstab_gain_kt
 
 		/*** END-CUSTOM ***/
 

@@ -96,10 +96,6 @@ MulticopterAttitudeControl::parameters_updated()
 						radians(_param_mc_yawrate_max.get())));
 
 	_man_tilt_max = math::radians(_param_mpc_man_tilt_max.get());
-
-	/*** CUSTOM ***/
-	_man_F_max = _param_f_max.get();
-	/*** END-CUSTOM ***/
 }
 
 float
@@ -187,62 +183,14 @@ MulticopterAttitudeControl::generate_attitude_setpoint(const Quatf &q, float dt,
 	// Transform to euler angles for logging only
 	Eulerf euler_des(q_sp);
 
-	/*** CUSTOM ***/
-
-	tilting_servo_sp_s servo_sp;
-
-	if(_param_airframe.get() == 13 ){ //If tilting_multirotors
-
-		_man_Fx_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
-		_man_Fy_input_filter.setParameters(dt,_param_mc_man_tilt_tau.get());
-		_man_Fx_input_filter.update(_manual_control_setpoint.pitch * _man_F_max);
-		_man_Fy_input_filter.update(_manual_control_setpoint.roll * _man_F_max);
-		const float fx_sp = _man_Fx_input_filter.getState();
-		const float fy_sp = _man_Fy_input_filter.getState();
-		// pitch_des = _manual_control_setpoint.aux1;
-		// PX4_INFO("aux1: %f ", (double)pitch_des)
-
-		// PX4_INFO("fx_sp: %f", (double)_manual_control_setpoint.x);
-		// PX4_INFO("fy_sp: %f", (double)_manual_control_setpoint.y);
-
-		/* Check if the drone is a H-tilting multirotor */
-		if (_param_tilting_type.get() == 0 && _param_mpc_pitch_on_tilt.get()){
-
-			servo_sp.angle[0] = euler_des(1);
-			euler_des(1) = 0.0f;
-
-		}
-		else if(_param_tilting_type.get() == 1 ){
-
-			euler_des(0) = 0.0f;
-			euler_des(1) = 0.0f;
-			attitude_setpoint.thrust_body[0] = fx_sp;
-			attitude_setpoint.thrust_body[1] = fy_sp;
-
-		}
-
-		q_sp = Eulerf(euler_des(0), euler_des(1), euler_des(2));
-	}
-
-	q_sp.copyTo(attitude_setpoint.q_d);
-	const Eulerf euler_sp(q_sp);
-
-	/*** END-CUSTOM ***/
-
-	attitude_setpoint.roll_body = euler_sp(0);
-	attitude_setpoint.pitch_body = euler_sp(1);
-	attitude_setpoint.yaw_body = euler_sp(2);
+	attitude_setpoint.roll_body = euler_des(0);
+	attitude_setpoint.pitch_body = euler_des(1);
+	attitude_setpoint.yaw_body = euler_des(2);
 
 	attitude_setpoint.thrust_body[2] = -throttle_curve(_manual_control_setpoint.throttle);
 
 	attitude_setpoint.timestamp = hrt_absolute_time();
 	_vehicle_attitude_setpoint_pub.publish(attitude_setpoint);
-
-	/*** CUSTOM ***/
-	// Send servo setpoint for one-tilt airframe
-	servo_sp.timestamp = hrt_absolute_time();
-	_tilting_servo_pub.publish(servo_sp);
-	/*** END-CUSTOM ***/
 
 	// update attitude controller setpoint immediately
 	_attitude_control.setAttitudeSetpoint(q_sp, attitude_setpoint.yaw_sp_move_rate);
@@ -323,6 +271,15 @@ MulticopterAttitudeControl::Run()
 				_vtol_in_transition_mode = vehicle_status.in_transition_mode;
 				_vtol_tailsitter = vehicle_status.is_vtol_tailsitter;
 
+				/*** CUSTOM ***/
+				if(vehicle_status.nav_state == vehicle_status_s::NAVIGATION_STATE_ORBIT){
+					_orbit_mode = true;
+					_attitude_control.setOrbstabGain(_param_orbstab_gain_kl2.get(), _param_orbstab_gain_kt.get());
+				}
+				else
+					_orbit_mode = false;
+				/*** END-CUSTOM ***/
+
 				const bool armed = (vehicle_status.arming_state == vehicle_status_s::ARMING_STATE_ARMED);
 				_spooled_up = armed && hrt_elapsed_time(&vehicle_status.armed_time) > _param_com_spoolup_time.get() * 1_s;
 			}
@@ -343,6 +300,14 @@ MulticopterAttitudeControl::Run()
 				_heading_good_for_control = vehicle_local_position.heading_good_for_control;
 			}
 		}
+
+		/*** CUSTOM ***/
+		if (_orbstab_pos_to_att_sub.updated()) {
+
+			if (!_orbstab_pos_to_att_sub.copy(&_orbstab_pos_to_att_sp))
+				PX4_WARN("Some problems receiving setpoint from orbstab_pos_to_att");
+		}
+		/*** END-CUSTOM ***/
 
 		bool attitude_setpoint_generated = false;
 
@@ -393,6 +358,22 @@ MulticopterAttitudeControl::Run()
 			rates_setpoint.timestamp = hrt_absolute_time();
 
 			_vehicle_rates_setpoint_pub.publish(rates_setpoint);
+
+			/*** CUSTOM ***/
+			if(_orbit_mode){
+
+				orbstab_att_to_rate_s att_to_rate;
+
+				if(_attitude_control.updateOrbstab(q, _orbstab_pos_to_att_sp, att_to_rate)){
+					att_to_rate.timestamp = hrt_absolute_time();
+					_orbstab_att_to_rate_pub.publish(att_to_rate);
+				}
+				else
+					PX4_ERR("Attitude Orbstab output not valid!!");
+
+			}
+			/*** END-CUSTOM ***/
+
 		}
 
 		if (_landed) {
