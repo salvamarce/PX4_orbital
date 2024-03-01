@@ -130,6 +130,11 @@ private:
 	orb_advert_t _mavlink_log_pub{nullptr};
 	uORB::PublicationMulti<orbit_status_s> _orbit_status_pub{ORB_ID(orbit_status)};
 
+	/*** CUSTOM ***/
+	bool _first_entry_on_circe{false};
+	hrt_abstime _last_circle_position_sp_time;
+	/*** END-CUSTOM ***/
+
 	DEFINE_PARAMETERS(
 		(ParamFloat<px4::params::MC_ORBIT_RAD_MAX>) _param_mc_orbit_rad_max,
 		(ParamFloat<px4::params::MPC_XY_CRUISE>) _param_mpc_xy_cruise, /**< cruise speed for circle approach */

@@ -46,6 +46,7 @@
 #include <uORB/topics/vehicle_local_position_setpoint.h>
 /*** CUSTOM ***/
 #include <uORB/topics/orbstab_pos_to_att.h>
+#include <px4_platform_common/module_params.h>
 /*** END-CUSTOM ***/
 
 struct PositionControlStates {

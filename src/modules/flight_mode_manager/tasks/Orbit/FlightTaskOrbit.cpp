@@ -316,6 +316,15 @@ void FlightTaskOrbit::_generate_circle_approach_setpoints()
 
 void FlightTaskOrbit::_generate_circle_setpoints()
 {
+	/*** CUSTOM ***/
+	float dt;
+	if(!_first_entry_on_circe){
+		dt = 0.0f;
+		_first_entry_on_circe = true;
+	}else
+		dt = math::constrain(((hrt_absolute_time() - _last_circle_position_sp_time) * 1e-6f), 0.002f, 0.04f);
+	/*** END-CUSTOM ***/
+
 	Vector3f center_to_position = _position - _center;
 	// xy velocity to go around in a circle
 	Vector2f velocity_xy(-center_to_position(1), center_to_position(0));
@@ -325,10 +334,18 @@ void FlightTaskOrbit::_generate_circle_setpoints()
 	// xy velocity adjustment to stay on the radius distance
 	velocity_xy += (_orbit_radius - center_to_position.xy().norm()) * Vector2f(center_to_position).unit_or_zero();
 
-	_position_setpoint(0) = _position_setpoint(1) = NAN;
+	//_position_setpoint(0) = _position_setpoint(1) = NAN;
+	/*** CUSTOM ***/
+	_position_setpoint(0) += velocity_xy(0) * dt;
+	_position_setpoint(1) += velocity_xy(1) * dt;
+	/*** END-CUSTOM ***/
+
 	_velocity_setpoint.xy() = velocity_xy;
 	_acceleration_setpoint.xy() = -Vector2f(center_to_position.unit_or_zero()) * _orbit_velocity * _orbit_velocity /
 				      _orbit_radius;
+
+	/*** CUSTOM ***/
+	_last_circle_position_sp_time = hrt_absolute_time();
 }
 
 void FlightTaskOrbit::_generate_circle_yaw_setpoints()

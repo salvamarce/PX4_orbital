@@ -584,12 +584,11 @@ void MulticopterPositionControl::Run()
 
 				orbstab_pos_to_att_s orbstab_msg;
 				if(_control.updateOrbstab(orbstab_msg,_orbit_radius)){
-					PX4_WARN("radius: %f", (double)_orbit_radius);
 					orbstab_msg.timestamp = hrt_absolute_time();
 					_orbstab_pos_to_att_pub.publish(orbstab_msg);
 				}
 				else
-					// PX4_WARN("Orbstab output not valid!!");
+					PX4_ERROR("Orbstab output not valid!!");
 
 			}
 
