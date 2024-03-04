@@ -60,9 +60,6 @@ ControlAllocator::ControlAllocator() :
 	_actuator_motors_pub.advertise();
 	_actuator_servos_pub.advertise();
 	_actuator_servos_trim_pub.advertise();
-	/*** CUSTOM ***/
-	_debug_array_pub.advertise();
-	/*** END-CUSTOM ***/
 
 	for (int i = 0; i < MAX_NUM_MOTORS; ++i) {
 		char buffer[17];
@@ -269,12 +266,6 @@ ControlAllocator::update_effectiveness_source()
 			tmp = new ActuatorEffectivenessHelicopter(this, ActuatorType::SERVOS);
 			break;
 
-		/*** CUSTOM ***/
-		case EffectivenessSource::TILTING_MULTIROTOR:
-			tmp = new ActuatorEffectivenessTiltingMultirotor(this);
-			break;
-		/*** END-CUSTOM ***/
-
 		default:
 			PX4_ERR("Unknown airframe");
 			break;
@@ -318,16 +309,6 @@ ControlAllocator::Run()
 	ScheduleDelayed(50_ms);
 #endif
 
-	/*** CUSTOM ***/
-	const EffectivenessSource source = (EffectivenessSource)_param_ca_airframe.get();
-
-	matrix::Vector<float, NUM_ACTUATORS> vertical_actuator_sp;
-	matrix::Vector<float, NUM_ACTUATORS> lateral_actuator_sp;
-	matrix::Vector<float, NUM_ACTUATORS> actuator_sp;
-	matrix::Vector<float, NUM_ACTUATORS> servo_sp;
-	tilting_servo_sp_s tilting_servo_sp;
-
-	/*** END-CUSTOM ***/
 
 	// Check if parameters have changed
 	if (_parameter_update_sub.updated() && !_armed) {
@@ -445,136 +426,24 @@ ControlAllocator::Run()
 			}
 		}
 
-		/*** CUSTOM ***/
-		if( source != EffectivenessSource::TILTING_MULTIROTOR ||
-		   ( source == EffectivenessSource::TILTING_MULTIROTOR &&
-		     _param_tilting_type.get() == 0 ) )
-		{
-		/*** END-CUSTOM ***/
+		for (int i = 0; i < _num_control_allocation; ++i) {
 
-			for (int i = 0; i < _num_control_allocation; ++i) {
+			_control_allocation[i]->setControlSetpoint(c[i]);
 
-				_control_allocation[i]->setControlSetpoint(c[i]);
+			// Do allocation
+			_control_allocation[i]->allocate();
 
-				// Do allocation
-				_control_allocation[i]->allocate();
+			_actuator_effectiveness->allocateAuxilaryControls(dt, i, _control_allocation[i]->_actuator_sp); //flaps and spoilers
+			_actuator_effectiveness->updateSetpoint(c[i], i, _control_allocation[i]->_actuator_sp,
+								_control_allocation[i]->getActuatorMin(), _control_allocation[i]->getActuatorMax());
 
-				/*** CUSTOM ***/
-				if(source == EffectivenessSource::TILTING_MULTIROTOR && _param_tilting_type.get() == 0){
-
-					if (_tilting_servo_setpoint_sub.update(&tilting_servo_sp)){
-
-						actuator_sp = _control_allocation[i]->getActuatorSetpoint();
-
-						for(int i_servo = _param_rotor_count.get(); i_servo<_param_rotor_count.get()+_param_servo_count.get(); i_servo++){
-							actuator_sp(i_servo) = tilting_servo_sp.angle[0];
-						}
-
-						_control_allocation[0]->setActuatorSetpoint(actuator_sp);
-					}
-
-				}
-				/*** END-CUSTOM ***/
-
-				_actuator_effectiveness->allocateAuxilaryControls(dt, i, _control_allocation[i]->_actuator_sp); //flaps and spoilers
-				_actuator_effectiveness->updateSetpoint(c[i], i, _control_allocation[i]->_actuator_sp,
-									_control_allocation[i]->getActuatorMin(), _control_allocation[i]->getActuatorMax());
-
-
-				if (_has_slew_rate) {
-					_control_allocation[i]->applySlewRateLimit(dt);
-				}
-
-				_control_allocation[i]->clipActuatorSetpoint();
-			}
-		/*** CUSTOM ***/
-		}
-		else{
-
-			//Vertical forces
-			_control_allocation[0]->setControlSetpoint(c[0]);
-			_control_allocation[0]->allocate();
-			vertical_actuator_sp = _control_allocation[0]->getActuatorSetpoint();
-
-			//Lateral forces
-			_control_allocation[1]->setControlSetpoint(c[0]);
-			_control_allocation[1]->allocate();
-			lateral_actuator_sp = _control_allocation[1]->getActuatorSetpoint();
-			// PX4_INFO("v_sp %d : %f ", 0, (double)lateral_actuator_sp(0));
-
-			//Rotors
-			for(int i=0; i<_num_actuators[0]; i++){
-
-				actuator_sp(i) = sqrtf( sqrtf( powf(vertical_actuator_sp(i),2) + powf(lateral_actuator_sp(i),2) ) );
-				// actuator_sp(i) = vertical_actuator_sp(i) + lateral_actuator_sp(i);
-				//PX4_INFO("motor: %f ", (double)actuator_sp(i));
-			}
-
-			// PX4_INFO("vert: %f  %f  %f  %f",(double)vertical_actuator_sp(0),(double)vertical_actuator_sp(1),(double)vertical_actuator_sp(2),(double)vertical_actuator_sp(3) );
-			//Tilts
-			_tilt_debug.id = 0;
-			for(int i=0; i<_num_actuators[1]; i++){
-
-				// TO DO: add a parameter for the threshold or solve that problem
-
-				if( vertical_actuator_sp(i) < 0.2f){
-					servo_sp(i) = 0.0f;
-					// PX4_INFO("tilt_true %d : %f ", i, (double)servo_sp(i));
-				}
-				else{
-					servo_sp(i) = atan2f(lateral_actuator_sp(i),vertical_actuator_sp(i));
-					// PX4_INFO("tilt %d : %f ", i, (double)servo_sp(i));
-				}
-				// PX4_INFO("Lat: %f", (double)lateral_actuator_sp(i));
-				// PX4_INFO("Vert: %f", (double)vertical_actuator_sp(i));
-				// PX4_INFO("%d) v: %f l: %f s: %f",i,(double)vertical_actuator_sp(i),(double)lateral_actuator_sp(i),(double)servo_sp(i));
-				_tilt_debug.data[3*i] =  vertical_actuator_sp(i);
-				_tilt_debug.data[3*i+1] =  lateral_actuator_sp(i);
-				_tilt_debug.data[3*i+2] =  servo_sp(i);
-				_tilt_debug.timestamp = hrt_absolute_time();
-				_debug_array_pub.publish(_tilt_debug);
-			}
-
-			matrix::Vector<float, NUM_ACTUATORS> actuatorMax, actuatorMin;
-			matrix::Vector<float, NUM_ACTUATORS> servoMax, servoMin;
-
-			for(int i=0; i<_num_actuators[0]; i++){
-				actuatorMax(i) = 1.0f;
-				actuatorMin(i) = 0.00f;
-			}
-
-			for(int i=_num_actuators[0]; i<(_num_actuators[0]+_num_actuators[1]); i++){
-				actuatorMax(i) =  1.0f;
-				actuatorMin(i) = -1.0f;
-			}
-
-			_control_allocation[0]->setActuatorMax(actuatorMax);
-			_control_allocation[0]->setActuatorMin(actuatorMin);
-
-			// _control_allocation[1]->setActuatorMax(actuatorMax);
-			// _control_allocation[1]->setActuatorMin(actuatorMin);
-
-			_control_allocation[0]->setActuatorSetpoint(actuator_sp);
-			_control_allocation[1]->setActuatorSetpoint(servo_sp);
-
-			//To do: check servo sp e actuator sp, uno è angolo e l'altro è pwm
-
-			// _actuator_effectiveness->updateSetpoint(c[0], 0, _control_allocation[0]->_actuator_sp,
-			// 	_control_allocation[0]->getActuatorMin(), _control_allocation[0]->getActuatorMax());
-			// _actuator_effectiveness->updateSetpoint(c[1], 1, _control_allocation[1]->_actuator_sp);
 
 			if (_has_slew_rate) {
-				_control_allocation[0]->applySlewRateLimit(dt);
-				// _control_allocation[1]->applySlewRateLimit(dt);
-
+				_control_allocation[i]->applySlewRateLimit(dt);
 			}
 
-			//Here the _actuator_sp is clipped and saved to be published
-			_control_allocation[0]->clipActuatorSetpoint();
-			// _control_allocation[1]->clipActuatorSetpoint();
-
+			_control_allocation[i]->clipActuatorSetpoint();
 		}
-		/*** END-CUSTOM ***/
 	}
 
 	// Publish actuator setpoint and allocator status
