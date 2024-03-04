@@ -45,9 +45,8 @@
 
 using namespace matrix;
 
-ActuatorEffectivenessRotors::ActuatorEffectivenessRotors(ModuleParams *parent, AxisConfiguration axis_config,
-		bool tilt_support, bool tilting_omnidir)
-	: ModuleParams(parent), _axis_config(axis_config)
+ActuatorEffectivenessRotors::ActuatorEffectivenessRotors(ModuleParams *parent, AxisConfiguration axis_config, bool tilt_support)
+	: ModuleParams(parent), _axis_config(axis_config), _tilt_support(tilt_support)
 {
 	for (int i = 0; i < NUM_ROTORS_MAX; ++i) {
 		char buffer[17];
@@ -72,6 +71,11 @@ ActuatorEffectivenessRotors::ActuatorEffectivenessRotors(ModuleParams *parent, A
 
 		snprintf(buffer, sizeof(buffer), "CA_ROTOR%u_KM", i);
 		_param_handles[i].moment_ratio = param_find(buffer);
+
+		if (_tilt_support) {
+			snprintf(buffer, sizeof(buffer), "CA_ROTOR%u_TILT", i);
+			_param_handles[i].tilt_index = param_find(buffer);
+		}
 
 	}
 
@@ -139,7 +143,7 @@ ActuatorEffectivenessRotors::addActuators(Configuration &configuration)
 		return false;
 	}
 
-	num_actuators = computeEffectivenessMatrix(_geometry,
+	int num_actuators = computeEffectivenessMatrix(_geometry,
 			configuration.effectiveness_matrices[configuration.selected_matrix],
 			configuration.num_actuators_matrix[configuration.selected_matrix]);
 
@@ -147,7 +151,6 @@ ActuatorEffectivenessRotors::addActuators(Configuration &configuration)
 	return true;
 }
 
-/*** CUSOTM ***/
 int
 ActuatorEffectivenessRotors::computeEffectivenessMatrix(const Geometry &geometry,
 		EffectivenessMatrix &effectiveness, int actuator_start_index)
