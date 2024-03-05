@@ -164,8 +164,9 @@ PARAM_DEFINE_FLOAT(MC_MAN_TILT_TAU, 0.0f);
 /**
  * Kl2 gain
  *
- * @min -10
- * @max 10
+ * @min -100
+ * @max 100
+ * @decimal 2
  * @group Orbstab
  */
 PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KL2, 1.f);
@@ -173,8 +174,9 @@ PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KL2, 1.f);
 /**
  * Kt gain
  *
- * @min -10
- * @max 10
+ * @min -100
+ * @max 100
+ * @decimal 2
  * @group Orbstab
  */
 PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KT, 3.f);

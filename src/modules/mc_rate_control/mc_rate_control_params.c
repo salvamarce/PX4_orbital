@@ -298,8 +298,9 @@ PARAM_DEFINE_INT32(MC_BAT_SCALE_EN, 0);
 /**
  * Kr1 gain
  *
- * @min -10
- * @max 10
+ * @min -100
+ * @max 100
+ * @decimal 2
  * @group Orbstab
  */
 PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KR1, 2.f);
@@ -307,8 +308,9 @@ PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KR1, 2.f);
 /**
  * Kr2 gain
  *
- * @min -10
- * @max 10
+ * @min -100
+ * @max 100
+ * @decimal 2
  * @group Orbstab
  */
 PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KR2, 2.f);
@@ -316,8 +318,9 @@ PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KR2, 2.f);
 /**
  * Kr3 gain
  *
- * @min -10
- * @max 10
+ * @min -100
+ * @max 100
+ * @decimal 2
  * @group Orbstab
  */
 PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KR3, 2.f);
