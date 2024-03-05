@@ -127,7 +127,8 @@ bool AttitudeControl::updateOrbstab(const matrix::Quatf &q, const orbstab_pos_to
 	att_to_rate.ues1 = pos_to_att.ues1 * sec_phi;
 	att_to_rate.ues2 = _orbstab_gain_kl2 * phi_err;
 	att_to_rate.ues3 = _orbstab_gain_kl2 * theta_err;
-	att_to_rate.ues4 = _orbstab_gain_kl2 * psi_err + pos_to_att.ues4_1 + pos_to_att.ues4_2 * ( sec_theta
+	att_to_rate.ues4_1 = _orbstab_gain_kl2 * psi_err;
+	att_to_rate.ues4_2 = pos_to_att.ues4_1 + pos_to_att.ues4_2 * ( sec_theta
 		* (pos_to_att.vel_error[1] * cos_psi + pos_to_att.vel_error[0] * sin_psi) * tanf(euler_drone(0))
 		- (pos_to_att.vel_error[0] * cos_psi + pos_to_att.vel_error[1] * sin_psi) * tanf(euler_drone(1)) );
 
@@ -136,7 +137,7 @@ bool AttitudeControl::updateOrbstab(const matrix::Quatf &q, const orbstab_pos_to
 		* (pos_to_att.vel_error[0] * cos_psi + pos_to_att.vel_error[1] * sin_psi) ) );
 
 	return PX4_ISFINITE(att_to_rate.ues1) && PX4_ISFINITE(att_to_rate.ues2) && PX4_ISFINITE(att_to_rate.ues3)
-		&& PX4_ISFINITE(att_to_rate.ues4) && PX4_ISFINITE(att_to_rate.ud1);
+		&& PX4_ISFINITE(att_to_rate.ues4_1) && PX4_ISFINITE(att_to_rate.ues4_2) && PX4_ISFINITE(att_to_rate.ud1);
 
 }
 /*** END-CUSTOM ***/

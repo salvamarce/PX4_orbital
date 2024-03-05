@@ -118,11 +118,6 @@ MulticopterRateControl::Run()
 		parameters_updated();
 	}
 
-	/*** CUSTOM ***/
-	tilting_servo_sp_s old_servo_sp;
-	tilting_servo_sp_s new_servo_sp;
-	/*** END-CUSTOM ***/
-
 	/* run controller on gyro changes */
 	vehicle_angular_velocity_s angular_velocity;
 
@@ -221,6 +216,30 @@ MulticopterRateControl::Run()
 			// run rate controller
 			const Vector3f att_control = _rate_control.update(rates, _rates_setpoint, angular_accel, dt, _maybe_landed || _landed);
 
+			/*** CUSTOM ***/
+			if(_vehicle_status.nav_state == vehicle_status_s::NAVIGATION_STATE_ORBIT){
+				if(_orbstab_att_to_rate_sub.updated()){
+					orbstab_att_to_rate_s orbstab_sp;
+
+					if(_orbstab_att_to_rate_sub.copy(&orbstab_sp)){
+						orbstab_sp.ues2 = angular_accel(0) - orbstab_sp.ues2;
+						orbstab_sp.ues3 = angular_accel(1) - orbstab_sp.ues3;
+						float ues4 = angular_accel(2) - orbstab_sp.ues4_1 + (1.0f/(rates(2) - _rates_setpoint(2))) * orbstab_sp.ues4_2;
+
+						float ud2 = - _param_orbstab_gain_kr1.get() * (rates(0) - _rates_setpoint(0));
+						float ud3 = - _param_orbstab_gain_kr2.get() * (rates(1) - _rates_setpoint(1));
+						float ud4 = - _param_orbstab_gain_kr3.get() * (rates(2) - _rates_setpoint(2));
+
+						_orbstab_thrust = orbstab_sp.ues1 + orbstab_sp.ud1;
+						_orbstab_torque(0) = orbstab_sp.ues2 + ud2;
+						_orbstab_torque(1) = orbstab_sp.ues3 + ud3;
+						_orbstab_torque(2) = ues4 + ud4;
+
+					}
+				}
+			}
+			/*** END-CUSTOM ***/
+
 			// publish rate controller status
 			rate_ctrl_status_s rate_ctrl_status{};
 			_rate_control.getRateControlStatus(rate_ctrl_status);
@@ -231,10 +250,37 @@ MulticopterRateControl::Run()
 			vehicle_thrust_setpoint_s vehicle_thrust_setpoint{};
 			vehicle_torque_setpoint_s vehicle_torque_setpoint{};
 
-			_thrust_setpoint.copyTo(vehicle_thrust_setpoint.xyz);
-			vehicle_torque_setpoint.xyz[0] = PX4_ISFINITE(att_control(0)) ? att_control(0) : 0.f;
-			vehicle_torque_setpoint.xyz[1] = PX4_ISFINITE(att_control(1)) ? att_control(1) : 0.f;
-			vehicle_torque_setpoint.xyz[2] = PX4_ISFINITE(att_control(2)) ? att_control(2) : 0.f;
+			/*** CUSTOM ***/
+			if(_vehicle_status.nav_state == vehicle_status_s::NAVIGATION_STATE_ORBIT){
+
+				vehicle_thrust_setpoint.xyz[0] = 0.0f;
+				vehicle_thrust_setpoint.xyz[1] = 0.0f;
+
+				if(PX4_ISFINITE(_orbstab_thrust) && _orbstab_torque.isAllFinite()){
+
+					PX4_WARN("fz: %f", (double)_orbstab_thrust);
+					PX4_WARN("tx, ty, tz: %f  %f  %f", (double)_orbstab_torque(0),(double)_orbstab_torque(1),(double)_orbstab_torque(1));
+					PX4_INFO("--------");
+					vehicle_thrust_setpoint.xyz[2] = _orbstab_thrust;
+					vehicle_torque_setpoint.xyz[0] = _orbstab_torque(0);
+					vehicle_torque_setpoint.xyz[1] = _orbstab_torque(1);
+					vehicle_torque_setpoint.xyz[2] = _orbstab_torque(2);
+				}
+				else{
+					vehicle_thrust_setpoint.xyz[2] = 0.5f;
+					vehicle_torque_setpoint.xyz[0] = 0.0f;
+					vehicle_torque_setpoint.xyz[1] = 0.0f;
+					vehicle_torque_setpoint.xyz[2] = 0.0f;
+					PX4_ERR("Orbstab rate thrust error!");
+				}
+			}
+			else{
+				_thrust_setpoint.copyTo(vehicle_thrust_setpoint.xyz);
+				vehicle_torque_setpoint.xyz[0] = PX4_ISFINITE(att_control(0)) ? att_control(0) : 0.f;
+				vehicle_torque_setpoint.xyz[1] = PX4_ISFINITE(att_control(1)) ? att_control(1) : 0.f;
+				vehicle_torque_setpoint.xyz[2] = PX4_ISFINITE(att_control(2)) ? att_control(2) : 0.f;
+			}
+			/*** END-CUSTOM ***/
 
 			// scale setpoints by battery status if enabled
 			if (_param_mc_bat_scale_en.get()) {
@@ -254,11 +300,6 @@ MulticopterRateControl::Run()
 				}
 			}
 
-			if (_tilting_servo_sub.update(&new_servo_sp)){
-				old_servo_sp = new_servo_sp;
-			}
-			old_servo_sp.timestamp = hrt_absolute_time();
-			_tilting_servo_pub.publish(old_servo_sp);
 
 			vehicle_thrust_setpoint.timestamp_sample = angular_velocity.timestamp_sample;
 			vehicle_thrust_setpoint.timestamp = hrt_absolute_time();

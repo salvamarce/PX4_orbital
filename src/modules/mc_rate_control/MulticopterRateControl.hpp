@@ -61,8 +61,7 @@
 #include <uORB/topics/vehicle_torque_setpoint.h>
 
 /*** CUSTOM ***/
-#include <uORB/topics/tilting_mc_desired_angles.h>
-#include <uORB/topics/tilting_servo_sp.h>
+#include <uORB/topics/orbstab_att_to_rate.h>
 /*** END-CUSTOM ***/
 
 using namespace time_literals;
@@ -115,8 +114,9 @@ private:
 	uORB::Publication<vehicle_thrust_setpoint_s>	_vehicle_thrust_setpoint_pub;
 
 	/*** CUSTOM ***/
-	uORB::Publication<tilting_servo_sp_s>	_tilting_servo_pub{ORB_ID(tilting_servo_setpoint)};
-	uORB::Subscription _tilting_servo_sub{ORB_ID(tilting_servo_setpoint)};
+	uORB::Subscription _orbstab_att_to_rate_sub{ORB_ID(orbstab_att_to_rate)};
+	matrix::Vector3f _orbstab_torque{};
+	float _orbstab_thrust{0.0f};
 	/*** END-CUSTOM ***/
 
 	vehicle_control_mode_s	_vehicle_control_mode{};
@@ -169,6 +169,14 @@ private:
 		(ParamFloat<px4::params::MC_ACRO_SUPEXPO>) _param_mc_acro_supexpo,		/**< superexpo stick curve shape (roll & pitch) */
 		(ParamFloat<px4::params::MC_ACRO_SUPEXPOY>) _param_mc_acro_supexpoy,		/**< superexpo stick curve shape (yaw) */
 
-		(ParamBool<px4::params::MC_BAT_SCALE_EN>) _param_mc_bat_scale_en
+		(ParamBool<px4::params::MC_BAT_SCALE_EN>) _param_mc_bat_scale_en,
+
+		/*** CUSTOM ***/
+
+		(ParamFloat<px4::params::ORBSTAB_GAIN_KR1>)	_param_orbstab_gain_kr1,
+		(ParamFloat<px4::params::ORBSTAB_GAIN_KR2>)	_param_orbstab_gain_kr2,
+		(ParamFloat<px4::params::ORBSTAB_GAIN_KR3>)	_param_orbstab_gain_kr3
+
+		/*** END-CUSTOM ***/
 	)
 };

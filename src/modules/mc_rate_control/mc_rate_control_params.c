@@ -292,3 +292,34 @@ PARAM_DEFINE_FLOAT(MC_YAWRATE_K, 1.0f);
  * @group Multicopter Rate Control
  */
 PARAM_DEFINE_INT32(MC_BAT_SCALE_EN, 0);
+
+// *** CUSTOM ***
+
+/**
+ * Kr1 gain
+ *
+ * @min -10
+ * @max 10
+ * @group Orbstab
+ */
+PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KR1, 2.f);
+
+/**
+ * Kr2 gain
+ *
+ * @min -10
+ * @max 10
+ * @group Orbstab
+ */
+PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KR2, 2.f);
+
+/**
+ * Kr3 gain
+ *
+ * @min -10
+ * @max 10
+ * @group Orbstab
+ */
+PARAM_DEFINE_FLOAT(ORBSTAB_GAIN_KR3, 2.f);
+
+// *** END-CUSTOM ***
