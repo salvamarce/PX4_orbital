@@ -253,26 +253,48 @@ MulticopterRateControl::Run()
 			/*** CUSTOM ***/
 			if(_vehicle_status.nav_state == vehicle_status_s::NAVIGATION_STATE_ORBIT){
 
-				vehicle_thrust_setpoint.xyz[0] = 0.0f;
-				vehicle_thrust_setpoint.xyz[1] = 0.0f;
+				if(_orbstab_att_to_rate_sub.updated()){
+					orbstab_att_to_rate_s orbstab_sp;
 
-				if(PX4_ISFINITE(_orbstab_thrust) && _orbstab_torque.isAllFinite()){
+					if(_orbstab_att_to_rate_sub.copy(&orbstab_sp)){
+						orbstab_sp.ues2 = angular_accel(0) - orbstab_sp.ues2;
+						orbstab_sp.ues3 = angular_accel(1) - orbstab_sp.ues3;
+						float ues4 = angular_accel(2) - orbstab_sp.ues4_1 + (1.0f/(rates(2) - _rates_setpoint(2))) * orbstab_sp.ues4_2;
 
-					PX4_WARN("fz: %f", (double)_orbstab_thrust);
-					PX4_WARN("tx, ty, tz: %f  %f  %f", (double)_orbstab_torque(0),(double)_orbstab_torque(1),(double)_orbstab_torque(1));
-					PX4_INFO("--------");
-					vehicle_thrust_setpoint.xyz[2] = _orbstab_thrust;
-					vehicle_torque_setpoint.xyz[0] = _orbstab_torque(0);
-					vehicle_torque_setpoint.xyz[1] = _orbstab_torque(1);
-					vehicle_torque_setpoint.xyz[2] = _orbstab_torque(2);
+						float ud2 = - _param_orbstab_gain_kr1.get() * (rates(0) - _rates_setpoint(0));
+						float ud3 = - _param_orbstab_gain_kr2.get() * (rates(1) - _rates_setpoint(1));
+						float ud4 = - _param_orbstab_gain_kr3.get() * (rates(2) - _rates_setpoint(2));
+
+						_orbstab_thrust = orbstab_sp.ues1 + orbstab_sp.ud1;
+						_orbstab_torque(0) = orbstab_sp.ues2 + ud2;
+						_orbstab_torque(1) = orbstab_sp.ues3 + ud3;
+						_orbstab_torque(2) = ues4 + ud4;
+
+
+						vehicle_thrust_setpoint.xyz[0] = 0.0f;
+						vehicle_thrust_setpoint.xyz[1] = 0.0f;
+
+						if(PX4_ISFINITE(_orbstab_thrust) && _orbstab_torque.isAllFinite()){
+
+							PX4_WARN("fz: %f", (double)_orbstab_thrust);
+							PX4_WARN("tx, ty, tz: %f  %f  %f", (double)_orbstab_torque(0),(double)_orbstab_torque(1),(double)_orbstab_torque(1));
+							PX4_INFO("--------");
+							vehicle_thrust_setpoint.xyz[2] = (_orbstab_thrust+ 0.5f) > 1 ? _orbstab_thrust : 1.0f;
+							vehicle_torque_setpoint.xyz[0] = _orbstab_torque(0);
+							vehicle_torque_setpoint.xyz[1] = _orbstab_torque(1);
+							vehicle_torque_setpoint.xyz[2] = 0.0f; //_orbstab_torque(2);
+						}
+						else{
+							vehicle_thrust_setpoint.xyz[2] = 0.5f;
+							vehicle_torque_setpoint.xyz[0] = 0.0f;
+							vehicle_torque_setpoint.xyz[1] = 0.0f;
+							vehicle_torque_setpoint.xyz[2] = 0.0f;
+							PX4_ERR("Orbstab rate thrust error!");
+						}
+					}
+
 				}
-				else{
-					vehicle_thrust_setpoint.xyz[2] = 0.5f;
-					vehicle_torque_setpoint.xyz[0] = 0.0f;
-					vehicle_torque_setpoint.xyz[1] = 0.0f;
-					vehicle_torque_setpoint.xyz[2] = 0.0f;
-					PX4_ERR("Orbstab rate thrust error!");
-				}
+
 			}
 			else{
 				_thrust_setpoint.copyTo(vehicle_thrust_setpoint.xyz);
